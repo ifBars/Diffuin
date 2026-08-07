@@ -1,35 +1,32 @@
 import { Codex, type ThreadEvent } from "@openai/codex-sdk";
 import { join } from "node:path";
-import type { CodexPort, CodexResult } from "./types.js";
+import type { CodexPort, CodexResult, ReasoningEffort } from "./types.js";
 import { sanitizedEnvironment } from "./environment.js";
 
 export class CodexClient implements CodexPort {
-  private readonly codex: Codex;
+  constructor(private readonly dataDir: string) {}
 
-  constructor(
-    private readonly model: string,
-    reasoningEffort: string,
-    dataDir: string,
-  ) {
-    this.codex = new Codex({
+  async run(
+    workingDirectory: string,
+    prompt: string,
+    options: { model: string; reasoningEffort: ReasoningEffort; outputSchema: object },
+  ): Promise<CodexResult> {
+    const codex = new Codex({
       config: {
-        model_reasoning_effort: reasoningEffort,
+        model_reasoning_effort: options.reasoningEffort,
         features: { apps: false, plugins: false },
       },
-      env: sanitizedEnvironment({ CODEX_HOME: join(dataDir, "codex-home") }),
+      env: sanitizedEnvironment({ CODEX_HOME: join(this.dataDir, "codex-home") }),
     });
-  }
-
-  async run(workingDirectory: string, prompt: string): Promise<CodexResult> {
-    const thread = this.codex.startThread({
-      model: this.model,
+    const thread = codex.startThread({
+      model: options.model,
       workingDirectory,
       sandboxMode: "workspace-write",
       networkAccessEnabled: false,
       webSearchMode: "disabled",
       approvalPolicy: "never",
     });
-    const { events } = await thread.runStreamed(prompt);
+    const { events } = await thread.runStreamed(prompt, { outputSchema: options.outputSchema });
     const finalResponse = await readFinalResponse(events);
     if (!thread.id) {
       throw new Error("Codex completed without returning a thread ID");

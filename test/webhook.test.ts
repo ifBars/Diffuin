@@ -16,6 +16,7 @@ describe("parseWorkRequest", () => {
     const result = parseWorkRequest("issue_comment", "delivery", payload, "Diffuin");
     assert.equal(result?.kind, "pull_request");
     assert.equal(result?.task, "fix the null dereference");
+    assert.equal(result?.mode, "auto");
     assert.equal(result?.repository, "octo-org/example-repo");
   });
 

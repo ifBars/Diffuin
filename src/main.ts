@@ -11,7 +11,7 @@ import { ScheduleOneReferenceWorkspace } from "./references.js";
 const config = loadConfig();
 const store = new JobStore(join(config.dataDir, "diffuin.sqlite"));
 const github = new GitHubClient(config.githubAppId, config.githubPrivateKey, config.githubWebhookSecret);
-const codex = new CodexClient(config.codexModel, config.codexReasoningEffort, config.dataDir);
+const codex = new CodexClient(config.dataDir);
 const references = new ScheduleOneReferenceWorkspace(
   config.dataDir,
   config.scheduleOneSkillPath,

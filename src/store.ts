@@ -17,6 +17,9 @@ interface JobRow {
   actor: string;
   kind: Job["kind"];
   task: string;
+  task_mode: Job["mode"];
+  requested_model: string | null;
+  requested_reasoning_effort: Job["requestedReasoningEffort"] | null;
   status: Job["status"];
   created_at: string;
   updated_at: string;
@@ -44,6 +47,9 @@ export class JobStore {
         actor TEXT NOT NULL,
         kind TEXT NOT NULL CHECK (kind IN ('issue', 'pull_request')),
         task TEXT NOT NULL,
+        task_mode TEXT NOT NULL DEFAULT 'auto',
+        requested_model TEXT,
+        requested_reasoning_effort TEXT,
         status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -51,6 +57,9 @@ export class JobStore {
       );
       CREATE INDEX IF NOT EXISTS jobs_status_created ON jobs(status, created_at);
     `);
+    this.ensureColumn("task_mode", "TEXT NOT NULL DEFAULT 'auto'");
+    this.ensureColumn("requested_model", "TEXT");
+    this.ensureColumn("requested_reasoning_effort", "TEXT");
   }
 
   enqueue(request: WorkRequest): Job | null {
@@ -59,12 +68,18 @@ export class JobStore {
     const result = this.database.prepare(`
       INSERT OR IGNORE INTO jobs (
         id, delivery_id, installation_id, repository_id, repository, owner, repo,
-        issue_number, comment_id, actor, kind, task, status, created_at, updated_at
+        issue_number, comment_id, actor, kind, task, task_mode, requested_model,
+        requested_reasoning_effort, status, created_at, updated_at
       ) VALUES (
         @id, @deliveryId, @installationId, @repositoryId, @repository, @owner, @repo,
-        @issueNumber, @commentId, @actor, @kind, @task, @status, @createdAt, @updatedAt
+        @issueNumber, @commentId, @actor, @kind, @task, @mode, @requestedModel,
+        @requestedReasoningEffort, @status, @createdAt, @updatedAt
       )
-    `).run(job);
+    `).run({
+      ...job,
+      requestedModel: job.requestedModel ?? null,
+      requestedReasoningEffort: job.requestedReasoningEffort ?? null,
+    });
     return result.changes === 1 ? job : null;
   }
 
@@ -105,6 +120,13 @@ export class JobStore {
   close(): void {
     this.database.close();
   }
+
+  private ensureColumn(name: string, definition: string): void {
+    const columns = this.database.prepare("PRAGMA table_info(jobs)").all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === name)) {
+      this.database.exec(`ALTER TABLE jobs ADD COLUMN ${name} ${definition}`);
+    }
+  }
 }
 
 function mapRow(row: JobRow): Job {
@@ -121,6 +143,9 @@ function mapRow(row: JobRow): Job {
     actor: row.actor,
     kind: row.kind,
     task: row.task,
+    mode: row.task_mode ?? "auto",
+    ...(row.requested_model ? { requestedModel: row.requested_model } : {}),
+    ...(row.requested_reasoning_effort ? { requestedReasoningEffort: row.requested_reasoning_effort } : {}),
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

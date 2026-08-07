@@ -1,0 +1,67 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { parseArtifact, renderArtifact } from "../src/artifact.js";
+
+const base = {
+  kind: "review",
+  verdict: "changes_requested",
+  confidence: "high",
+  summary: "The change has one authority regression.",
+  findings: [{
+    severity: "P1",
+    title: "Client can mutate server state",
+    path: "S1API/Networking/Example.cs",
+    line: 42,
+    body: "The new call runs on every peer and writes authoritative state.",
+    recommendation: "Guard the mutation to the server-owned path.",
+  }],
+  evidence: ["Compared the complete base-to-head diff."],
+  designChoices: [],
+  phases: [],
+  validationPerformed: ["Static inspection only."],
+  validationRemaining: ["Two-client runtime smoke test."],
+  openQuestions: [],
+};
+
+describe("Diffuin artifacts", () => {
+  it("renders a compact review and native inline finding", () => {
+    const artifact = parseArtifact(JSON.stringify(base));
+    const rendered = renderArtifact(
+      artifact,
+      { mode: "review", model: "gpt-5.6-luna", reasoningEffort: "high", reason: "ordinary pull request" },
+      { threadId: "thread", elapsedSeconds: 12 },
+    );
+    assert.match(rendered.body, /## Diffuin review/);
+    assert.match(rendered.body, /1 P1/);
+    assert.equal(rendered.inlineComments[0]?.line, 42);
+    assert.match(rendered.inlineComments[0]?.body ?? "", /Recommended change/);
+    assert.ok(rendered.body.endsWith("Verify findings and plans against the current source and runtime."));
+  });
+
+  it("rejects more than six findings instead of truncating Markdown", () => {
+    assert.throws(() => parseArtifact(JSON.stringify({ ...base, findings: Array(7).fill(base.findings[0]) })));
+  });
+
+  it("keeps findings without a valid diff location in the top-level review", () => {
+    const artifact = parseArtifact(JSON.stringify({
+      ...base,
+      findings: [{
+        severity: "P2",
+        title: "Lifecycle ambiguity",
+        path: "",
+        line: 0,
+        body: "The cleanup owner is not established by the changed lines.",
+        recommendation: "Document and enforce the cleanup owner.",
+      }],
+    }));
+
+    const rendered = renderArtifact(
+      artifact,
+      { mode: "review", model: "gpt-5.6-luna", reasoningEffort: "high", reason: "ordinary pull request" },
+      { threadId: "thread", elapsedSeconds: 1 },
+    );
+    assert.equal(rendered.inlineComments.length, 0);
+    assert.match(rendered.body, /The cleanup owner is not established/);
+    assert.match(rendered.body, /Document and enforce the cleanup owner/);
+  });
+});

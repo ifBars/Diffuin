@@ -32,13 +32,40 @@ export class GitHubClient implements GitHubPort {
     });
   }
 
-  async comment(request: WorkRequest, body: string): Promise<void> {
+  async comment(request: WorkRequest, body: string): Promise<number> {
     const octokit = await this.installation(request);
-    await octokit.rest.issues.createComment({
+    const response = await octokit.rest.issues.createComment({
       owner: request.owner,
       repo: request.repo,
       issue_number: request.issueNumber,
       body,
+    });
+    return response.data.id;
+  }
+
+  async updateComment(request: WorkRequest, commentId: number, body: string): Promise<void> {
+    const octokit = await this.installation(request);
+    await octokit.rest.issues.updateComment({
+      owner: request.owner,
+      repo: request.repo,
+      comment_id: commentId,
+      body,
+    });
+  }
+
+  async reviewPullRequest(
+    request: WorkRequest,
+    body: string,
+    comments: Array<{ path: string; line: number; body: string }>,
+  ): Promise<void> {
+    const octokit = await this.installation(request);
+    await octokit.rest.pulls.createReview({
+      owner: request.owner,
+      repo: request.repo,
+      pull_number: request.issueNumber,
+      event: "COMMENT",
+      body,
+      comments: comments.map((comment) => ({ ...comment, side: "RIGHT" as const })),
     });
   }
 
@@ -65,6 +92,12 @@ export class GitHubClient implements GitHubPort {
       repo: request.repo,
       pull_number: request.issueNumber,
     });
+    const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
+      owner: request.owner,
+      repo: request.repo,
+      pull_number: request.issueNumber,
+      per_page: 100,
+    }, (page) => page.data.map((file) => file.filename));
     return {
       baseBranch: response.data.base.ref,
       headBranch: response.data.head.ref,
@@ -72,6 +105,10 @@ export class GitHubClient implements GitHubPort {
       headRepository: response.data.head.repo?.full_name ?? "",
       title: response.data.title,
       body: response.data.body,
+      additions: response.data.additions,
+      deletions: response.data.deletions,
+      changedFiles: response.data.changed_files,
+      files,
     };
   }
 

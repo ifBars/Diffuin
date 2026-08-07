@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { Config } from "./config.js";
 import type { GitHubPort } from "./types.js";
 import { canWrite } from "./mention.js";
+import { validateOverrides } from "./routing.js";
 import { verifyGitHubSignature } from "./signature.js";
 import { JobStore } from "./store.js";
 import { parseWorkRequest } from "./webhook.js";
@@ -43,6 +44,17 @@ export function createDiffuinServer(config: Config, store: JobStore, github: Git
       const permission = await github.getActorPermission(work);
       if (!canWrite(permission)) {
         return json(response, 202, { status: "actor_not_authorized" });
+      }
+
+      const commandError = validateOverrides(work, config);
+      if (commandError) {
+        await github.addReaction(work, "confused").catch(() => undefined);
+        await github.comment(
+          work,
+          `Diffuin could not queue this request.\n\n\`${commandError.replace(/`/g, "'")}\`\n\n` +
+          "Use `@Diffuin review|plan|implement|answer --model <model> --effort <level> -- <instructions>`."
+        ).catch(() => undefined);
+        return json(response, 202, { status: "invalid_command" });
       }
 
       const job = store.enqueue(work);

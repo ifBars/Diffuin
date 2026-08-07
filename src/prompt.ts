@@ -1,4 +1,5 @@
 import type { IssueContext, Job, PullRequestContext, ScheduleOneReferences } from "./types.js";
+import type { ExecutionRoute } from "./routing.js";
 
 export function buildPrompt(
   job: Job,
@@ -6,6 +7,7 @@ export function buildPrompt(
   pullRequest: PullRequestContext | null,
   references: ScheduleOneReferences,
   comparisonReference?: string,
+  route?: ExecutionRoute,
 ): string {
   const conversation = pullRequest
     ? `This task was requested on pull request #${job.issueNumber}: ${pullRequest.title}.\n\n${pullRequest.body ?? ""}`
@@ -13,6 +15,9 @@ export function buildPrompt(
   const reviewDiff = pullRequest && comparisonReference
     ? `For a PR review, inspect the complete change with \`git diff --find-renames ${comparisonReference}...HEAD\`. The checked-out HEAD is the PR head and \`${comparisonReference}\` is its base.`
     : "";
+
+  const selectedMode = route?.mode ?? "answer";
+  const expectedKind = selectedMode === "review" ? "review" : selectedMode === "plan" ? "plan" : "response";
 
   return `You are Diffuin, a Schedule One modding review and issue-planning agent working in a fresh checkout of ${job.repository}.
 
@@ -29,6 +34,8 @@ The authorized user @${job.actor} requested:
 
 ${job.task}
 
+Request mode: ${selectedMode}. Return artifact kind: ${expectedKind}.
+
 ${reviewDiff}
 
 Schedule One evidence available to you:
@@ -44,8 +51,9 @@ Evidence rules:
 - If evidence is missing or ambiguous, say so and define the smallest human validation needed.
 
 Review behavior:
-- For PR reviews, prioritize actionable correctness, lifecycle, public API, persistence, authority/networking, headless safety, and Mono/IL2CPP compatibility findings. Cite target-repository file paths and tight line ranges. Do not manufacture findings to fill a quota.
-- For issue work, distinguish confirmed source evidence from proposals. Produce a concrete scope, acceptance criteria, implementation seams, compatibility expectations, and validation checklist.
+- For PR reviews, prioritize actionable correctness, lifecycle, public API, persistence, authority/networking, headless safety, and Mono/IL2CPP compatibility findings. Return at most six findings in severity order. Each finding needs a target-repository path, a current right-side diff line when available (or 0 when it cannot be placed inline), the concrete consequence, and the smallest recommended change. Do not manufacture findings to fill a quota.
+- For issue plans, distinguish confirmed evidence from proposals. Use at most five evidence points, three design decisions, and four implementation phases. Keep tasks file-specific and include persistence, networking, compatibility, and validation only where relevant.
+- Do not repeat findings in evidence, duplicate tasks as agent prompts, generate diagrams by default, or include generic praise and process narration.
 - Do not edit files for review, explanation, or planning requests. If implementation is explicitly requested, make only the smallest reviewable repository changes.
 
 Repository constraints:
@@ -56,7 +64,13 @@ Repository constraints:
 - Never include secrets or credential material in your final response.
 - Do not install dependencies from the network.
 
-Finish with a concise, GitHub-ready response. State the evidence inspected, static checks run, and runtime validation that remains unverified.`;
+Output contract:
+- Return only the structured JSON requested by the output schema; do not wrap it in Markdown.
+- Keep the summary under three short paragraphs and preserve conclusions, material evidence, caveats, and next actions before optional detail.
+- Use verdict \`approve\` only when a PR review found no actionable problems; Diffuin does not submit a GitHub approval.
+- For plans and general responses use verdict \`not_applicable\`.
+- Empty arrays are valid when a section is not relevant.
+- State repository checks actually run in validationPerformed. Put all unperformed game, runtime, multiplayer, save/load, and end-to-end checks in validationRemaining.`;
 }
 
 function formatReferences(references: ScheduleOneReferences): string {

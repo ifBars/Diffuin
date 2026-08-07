@@ -32,16 +32,23 @@ instance may also mount an AssetRipper export read-only.
 7. For pull requests, fetches the base branch so Codex can review the complete
    base-to-head diff.
 8. Scans the response and patch for common secret formats.
-9. Comments with read-only review/planning results, or opens a pull request only
-   when an explicitly requested implementation changed files.
+9. Routes reasoning effort from task shape and PR size unless the mention
+   supplies an authorized override.
+10. Edits a single status comment into a compact review or plan. PR findings
+    are posted on the relevant diff lines when GitHub accepts the location.
+11. Opens a pull request only when an explicitly requested implementation
+    changed files. Read-only review and planning jobs refuse to publish patches.
 
 Diffuin does not have Schedule One or Unity. It must not claim in-game,
 Play Mode, Mono runtime, IL2CPP runtime, multiplayer, save/load, or full
 end-to-end validation. Its output separates source/static evidence from the
 manual runtime checks a maintainer still needs to perform.
 
-The default model is `gpt-5.6-luna` with `max` reasoning, configurable through
-environment variables.
+The default model is `gpt-5.6-luna`. Automatic reasoning routing uses `medium`
+for small low-risk reviews, `high` for ordinary reviews, `xhigh` for
+non-trivial reviews and plans, and `max` only for unusually large or risky
+work. Mentions can override both model and reasoning within deployment-owned
+allowlists.
 
 ## GitHub App setup
 
@@ -72,13 +79,16 @@ Copy `.env.example` to `.env`. Required values are:
 | `GITHUB_PRIVATE_KEY_BASE64` | Hosted alternative to the path; set exactly one private-key option |
 | `GITHUB_WEBHOOK_SECRET` | HMAC secret configured on the App |
 | `ALLOWED_REPOSITORIES` | Comma-separated `owner/repository` allowlist |
+| `CODEX_MODEL` | Default model when a mention does not override it |
+| `CODEX_ALLOWED_MODELS` | Comma-separated model allowlist for mention overrides |
+| `CODEX_REASONING_ROUTING` | Enables automatic reasoning selection; defaults to `true` |
+| `CODEX_REASONING_EFFORT` | Fixed fallback used when automatic routing is disabled |
 | `SCHEDULE_ONE_SKILL_PATH` | Bundled Schedule One skill directory; defaults to `./skills/schedule-one-modding` |
 | `SCHEDULE_ONE_CODE_ARCHIVER_URL` | Runtime source for regular/beta stripped-code references |
 | `SCHEDULE_ONE_ASSETRIPPER_PATH` | Optional read-only AssetRipper export mount for local/self-hosted use |
 
-`DIFFUIN_HANDLE`, `DATA_DIR`, `CODEX_MODEL`, `CODEX_REASONING_EFFORT`, the
-Schedule One reference settings, and the port have defaults shown in
-`.env.example`.
+`DIFFUIN_HANDLE`, `DATA_DIR`, the Codex routing settings, the Schedule One
+reference settings, and the port have defaults shown in `.env.example`.
 
 ## Run with Docker Compose
 
@@ -140,6 +150,19 @@ Typical review and planning requests are read-only:
 @Diffuin identify the Mono/IL2CPP and save/load risks in this proposal
 ```
 
+Explicit commands support safe per-request overrides:
+
+```text
+@Diffuin review --model gpt-5.6-terra --effort high
+@Diffuin plan --model gpt-5.6-luna --effort xhigh -- focus on persistence and multiplayer authority
+```
+
+Supported commands are `review`, `plan`, `implement`, and `answer`. Use `--`
+before free-form instructions when options are present. Supported reasoning
+levels are `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. Invalid or
+disallowed overrides are rejected before a job is queued. Existing free-form
+mentions continue to work and are routed automatically.
+
 Implementation remains explicit:
 
 ```text
@@ -148,7 +171,10 @@ Implementation remains explicit:
 
 Diffuin reacts with eyes when the request is queued. It comments with the review
 or plan when no files changed, and posts a pull-request URL when an explicit
-implementation request produced a patch.
+implementation request produced a patch. Reviews and plans use bounded,
+structured sections instead of slicing long Markdown. Every delivered artifact
+ends with an AI-generated accuracy notice and includes collapsed model,
+reasoning, elapsed-time, and Codex-thread metadata.
 
 ## Development
 

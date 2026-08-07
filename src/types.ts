@@ -1,7 +1,13 @@
 export type TriggerKind = "issue" | "pull_request";
+export type TaskMode = "auto" | "review" | "plan" | "implement" | "answer";
+export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface MentionCommand {
   task: string;
+  mode: TaskMode;
+  requestedModel?: string | undefined;
+  requestedReasoningEffort?: ReasoningEffort | undefined;
+  error?: string | undefined;
 }
 
 export interface WorkRequest {
@@ -16,6 +22,10 @@ export interface WorkRequest {
   actor: string;
   kind: TriggerKind;
   task: string;
+  mode: TaskMode;
+  requestedModel?: string | undefined;
+  requestedReasoningEffort?: ReasoningEffort | undefined;
+  commandError?: string | undefined;
 }
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed";
@@ -38,6 +48,10 @@ export interface PullRequestContext extends IssueContext {
   headBranch: string;
   headSha: string;
   headRepository: string;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  files: string[];
 }
 
 export interface ScheduleOneReferences {
@@ -51,7 +65,13 @@ export interface ScheduleOneReferences {
 export interface GitHubPort {
   getActorPermission(request: WorkRequest): Promise<string>;
   addReaction(request: WorkRequest, reaction: "+1" | "eyes" | "rocket" | "confused"): Promise<void>;
-  comment(request: WorkRequest, body: string): Promise<void>;
+  comment(request: WorkRequest, body: string): Promise<number>;
+  updateComment(request: WorkRequest, commentId: number, body: string): Promise<void>;
+  reviewPullRequest(
+    request: WorkRequest,
+    body: string,
+    comments: Array<{ path: string; line: number; body: string }>,
+  ): Promise<void>;
   getDefaultBranch(request: WorkRequest): Promise<string>;
   getIssue(request: WorkRequest): Promise<IssueContext>;
   getPullRequest(request: WorkRequest): Promise<PullRequestContext>;
@@ -68,5 +88,9 @@ export interface CodexResult {
 }
 
 export interface CodexPort {
-  run(workingDirectory: string, prompt: string): Promise<CodexResult>;
+  run(
+    workingDirectory: string,
+    prompt: string,
+    options: { model: string; reasoningEffort: ReasoningEffort; outputSchema: object },
+  ): Promise<CodexResult>;
 }

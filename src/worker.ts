@@ -1,5 +1,7 @@
+import { artifactOutputSchema, parseArtifact, renderArtifact, renderInlineFallback } from "./artifact.js";
 import type { Config } from "./config.js";
 import { buildPrompt } from "./prompt.js";
+import { routeExecution } from "./routing.js";
 import { assertNoSecrets } from "./secrets.js";
 import type { CodexPort, GitHubPort, Job, PullRequestContext } from "./types.js";
 import { GitWorkspace } from "./git.js";
@@ -36,9 +38,18 @@ export class Worker {
 
   async process(job: Job): Promise<void> {
     let workspacePath: string | null = null;
+    let statusCommentId: number | null = null;
+    const startedAt = Date.now();
     try {
       const pullRequest = job.kind === "pull_request" ? await this.github.getPullRequest(job) : null;
       const issue = pullRequest ?? await this.github.getIssue(job);
+      const route = routeExecution(job, issue, pullRequest, this.config);
+      statusCommentId = await this.github.comment(
+        job,
+        `Diffuin is ${presentParticiple(route.mode)} this ${job.kind === "pull_request" ? "pull request" : "issue"}.\n\n` +
+        `<sub>Model: \`${route.model}\` · Reasoning: \`${route.reasoningEffort}\` (${route.reason})</sub>`,
+      );
+
       const defaultBranch = await this.github.getDefaultBranch(job);
       const sourceRef = pullRequest?.headSha ?? defaultBranch;
       const token = await this.github.getInstallationToken(job);
@@ -56,13 +67,38 @@ export class Worker {
       const references = await this.references.prepare();
       const result = await this.codex.run(
         repository.path,
-        buildPrompt(job, issue, pullRequest, references, repository.comparisonReference),
+        buildPrompt(job, issue, pullRequest, references, repository.comparisonReference, route),
+        { model: route.model, reasoningEffort: route.reasoningEffort, outputSchema: artifactOutputSchema },
       );
       assertNoSecrets(result.finalResponse);
-      if (!(await this.workspaces.hasChanges(repository.path))) {
-        await this.github.comment(job, `Diffuin completed this request without repository changes.\n\n${truncate(result.finalResponse)}`);
+      const artifact = parseArtifact(result.finalResponse);
+      const expectedKind = route.mode === "review" ? "review" : route.mode === "plan" ? "plan" : "response";
+      if (artifact.kind !== expectedKind) {
+        throw new Error(`Codex returned ${artifact.kind} output for a ${route.mode} request`);
+      }
+      const rendered = renderArtifact(artifact, route, {
+        threadId: result.threadId,
+        elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
+      });
+      assertNoSecrets(rendered.body);
+
+      const hasChanges = await this.workspaces.hasChanges(repository.path);
+      if (!hasChanges) {
+        let body = rendered.body;
+        if (job.kind === "pull_request" && route.mode === "review" && rendered.inlineComments.length) {
+          try {
+            await this.github.reviewPullRequest(job, "", rendered.inlineComments);
+          } catch {
+            body += renderInlineFallback(rendered.inlineComments);
+          }
+        }
+        await this.replaceStatus(job, statusCommentId, body);
         this.store.finish(job.id, "succeeded");
         return;
+      }
+
+      if (route.mode !== "implement") {
+        throw new Error(`Codex modified files during a read-only ${route.mode} request; refusing to publish the patch`);
       }
 
       const patch = await this.workspaces.readPatch(repository.path);
@@ -77,20 +113,32 @@ export class Worker {
         head: repository.branch,
         base: targetBranch,
         title: `Diffuin: ${truncateTitle(job.task)}`,
-        body: buildPullRequestBody(job, result.finalResponse, result.threadId, commitSha),
+        body: buildPullRequestBody(job, rendered.body, commitSha),
       });
       await this.github.addReaction(job, "rocket");
-      await this.github.comment(job, `Diffuin opened #${created.number}: ${created.url}`);
+      await this.replaceStatus(job, statusCommentId, `Diffuin opened #${created.number}: ${created.url}`);
       this.store.finish(job.id, "succeeded");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.store.finish(job.id, "failed", message);
       await this.github.addReaction(job, "confused").catch(() => undefined);
-      await this.github.comment(job, `Diffuin could not complete this request.\n\n\`${escapeInline(message)}\``).catch(() => undefined);
+      await this.replaceStatus(
+        job,
+        statusCommentId,
+        `Diffuin could not complete this request.\n\n\`${escapeInline(message)}\``,
+      ).catch(() => undefined);
     } finally {
       if (workspacePath) {
         await this.workspaces.cleanup(workspacePath).catch(() => undefined);
       }
+    }
+  }
+
+  private async replaceStatus(job: Job, commentId: number | null, body: string): Promise<void> {
+    if (commentId) {
+      await this.github.updateComment(job, commentId, body);
+    } else {
+      await this.github.comment(job, body);
     }
   }
 }
@@ -104,19 +152,14 @@ function targetBranchFor(job: Job, pullRequest: PullRequestContext | null, defau
     : pullRequest.baseBranch;
 }
 
-function buildPullRequestBody(job: Job, response: string, threadId: string, commitSha: string): string {
+function buildPullRequestBody(job: Job, response: string, commitSha: string): string {
   return `Requested by @${job.actor} in #${job.issueNumber}.
 
-${truncate(response)}
+${response}
 
 ---
 Diffuin job: \`${job.id}\`  
-Codex thread: \`${threadId}\`  
 Commit: \`${commitSha}\``;
-}
-
-function truncate(value: string, length = 5000): string {
-  return value.length <= length ? value : `${value.slice(0, length)}\n\n…truncated`;
 }
 
 function truncateTitle(value: string): string {
@@ -130,4 +173,13 @@ function escapeInline(value: string): string {
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function presentParticiple(mode: string): string {
+  switch (mode) {
+    case "review": return "reviewing";
+    case "plan": return "planning";
+    case "implement": return "implementing";
+    default: return "answering";
+  }
 }

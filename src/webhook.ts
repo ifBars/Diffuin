@@ -58,5 +58,9 @@ export function parseWorkRequest(
         ? "pull_request"
         : "issue",
     task: command.task,
+    mode: command.mode,
+    requestedModel: command.requestedModel,
+    requestedReasoningEffort: command.requestedReasoningEffort,
+    commandError: command.error,
   };
 }

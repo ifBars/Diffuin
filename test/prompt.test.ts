@@ -19,6 +19,7 @@ const job: Job = {
   actor: "maintainer",
   kind: "pull_request",
   task: "review this for dual-runtime regressions",
+  mode: "review",
 };
 
 const pullRequest: PullRequestContext = {
@@ -28,6 +29,10 @@ const pullRequest: PullRequestContext = {
   headRepository: "ifBars/S1API",
   title: "Add example support",
   body: "Implements the requested API.",
+  additions: 40,
+  deletions: 8,
+  changedFiles: 2,
+  files: ["S1API/Example.cs"],
 };
 
 const references: ScheduleOneReferences = {
