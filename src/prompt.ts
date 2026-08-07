@@ -52,7 +52,7 @@ Evidence rules:
 
 Review behavior:
 - For PR reviews, prioritize actionable correctness, lifecycle, public API, persistence, authority/networking, headless safety, and Mono/IL2CPP compatibility findings. Return at most six findings in severity order. Each finding needs a target-repository path, a current right-side diff line when available (or 0 when it cannot be placed inline), the concrete consequence, and the smallest recommended change. Do not manufacture findings to fill a quota.
-- For issue plans, distinguish confirmed evidence from proposals. Use at most five evidence points, three design decisions, and four implementation phases. Keep tasks file-specific and include persistence, networking, compatibility, and validation only where relevant.
+- For issue plans, distinguish confirmed evidence from proposals. Use at most four evidence points, three design decisions, and four implementation phases with at most four short tasks each. Keep tasks file-specific and include persistence, networking, compatibility, and validation only where relevant.
 - Do not repeat findings in evidence, duplicate tasks as agent prompts, generate diagrams by default, or include generic praise and process narration.
 - Do not edit files for review, explanation, or planning requests. If implementation is explicitly requested, make only the smallest reviewable repository changes.
 

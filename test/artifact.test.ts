@@ -64,4 +64,23 @@ describe("Diffuin artifacts", () => {
     assert.match(rendered.body, /The cleanup owner is not established/);
     assert.match(rendered.body, /Document and enforce the cleanup owner/);
   });
+
+  it("collapses supporting evidence and validation in plans", () => {
+    const artifact = parseArtifact(JSON.stringify({
+      ...base,
+      kind: "plan",
+      verdict: "not_applicable",
+      findings: [],
+      designChoices: ["Keep the public API runtime-neutral."],
+      phases: [{ title: "API", objective: "Add the contract.", tasks: [] }],
+    }));
+    const rendered = renderArtifact(
+      artifact,
+      { mode: "plan", model: "gpt-5.6-terra", reasoningEffort: "xhigh", reason: "source-backed issue plan" },
+      { threadId: "thread", elapsedSeconds: 1 },
+    );
+
+    assert.match(rendered.body, /<summary>Evidence and validation<\/summary>/);
+    assert.match(rendered.body, /### Implementation/);
+  });
 });

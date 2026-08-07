@@ -6,33 +6,33 @@ const findingSchema = z.object({
   title: z.string().min(1).max(140),
   path: z.string().max(300),
   line: z.number().int().min(0),
-  body: z.string().min(1).max(900),
-  recommendation: z.string().min(1).max(500),
+  body: z.string().min(1).max(700),
+  recommendation: z.string().min(1).max(350),
 });
 
 const taskSchema = z.object({
-  description: z.string().min(1).max(400),
-  files: z.array(z.string().max(220)).max(5),
+  description: z.string().min(1).max(280),
+  files: z.array(z.string().max(220)).max(4),
 });
 
 const phaseSchema = z.object({
   title: z.string().min(1).max(120),
-  objective: z.string().min(1).max(350),
-  tasks: z.array(taskSchema).max(5),
+  objective: z.string().min(1).max(240),
+  tasks: z.array(taskSchema).max(4),
 });
 
 export const artifactSchema = z.object({
   kind: z.enum(["review", "plan", "response"]),
   verdict: z.enum(["approve", "comment", "changes_requested", "not_applicable"]),
   confidence: z.enum(["low", "medium", "high"]),
-  summary: z.string().min(1).max(900),
+  summary: z.string().min(1).max(600),
   findings: z.array(findingSchema).max(6),
-  evidence: z.array(z.string().max(400)).max(5),
-  designChoices: z.array(z.string().max(450)).max(3),
+  evidence: z.array(z.string().max(280)).max(4),
+  designChoices: z.array(z.string().max(320)).max(3),
   phases: z.array(phaseSchema).max(4),
-  validationPerformed: z.array(z.string().max(350)).max(6),
-  validationRemaining: z.array(z.string().max(350)).max(6),
-  openQuestions: z.array(z.string().max(400)).max(4),
+  validationPerformed: z.array(z.string().max(260)).max(4),
+  validationRemaining: z.array(z.string().max(260)).max(4),
+  openQuestions: z.array(z.string().max(300)).max(3),
 });
 
 export type DiffuinArtifact = z.infer<typeof artifactSchema>;
@@ -48,7 +48,7 @@ export const artifactOutputSchema = {
     kind: { type: "string", enum: ["review", "plan", "response"] },
     verdict: { type: "string", enum: ["approve", "comment", "changes_requested", "not_applicable"] },
     confidence: { type: "string", enum: ["low", "medium", "high"] },
-    summary: { type: "string", maxLength: 900 },
+    summary: { type: "string", maxLength: 600 },
     findings: {
       type: "array",
       maxItems: 6,
@@ -61,13 +61,13 @@ export const artifactOutputSchema = {
           title: { type: "string", maxLength: 140 },
           path: { type: "string", maxLength: 300 },
           line: { type: "integer", minimum: 0 },
-          body: { type: "string", maxLength: 900 },
-          recommendation: { type: "string", maxLength: 500 },
+          body: { type: "string", maxLength: 700 },
+          recommendation: { type: "string", maxLength: 350 },
         },
       },
     },
-    evidence: { type: "array", maxItems: 5, items: { type: "string", maxLength: 400 } },
-    designChoices: { type: "array", maxItems: 3, items: { type: "string", maxLength: 450 } },
+    evidence: { type: "array", maxItems: 4, items: { type: "string", maxLength: 280 } },
+    designChoices: { type: "array", maxItems: 3, items: { type: "string", maxLength: 320 } },
     phases: {
       type: "array",
       maxItems: 4,
@@ -77,26 +77,26 @@ export const artifactOutputSchema = {
         required: ["title", "objective", "tasks"],
         properties: {
           title: { type: "string", maxLength: 120 },
-          objective: { type: "string", maxLength: 350 },
+          objective: { type: "string", maxLength: 240 },
           tasks: {
             type: "array",
-            maxItems: 5,
+            maxItems: 4,
             items: {
               type: "object",
               additionalProperties: false,
               required: ["description", "files"],
               properties: {
-                description: { type: "string", maxLength: 400 },
-                files: { type: "array", maxItems: 5, items: { type: "string", maxLength: 220 } },
+                description: { type: "string", maxLength: 280 },
+                files: { type: "array", maxItems: 4, items: { type: "string", maxLength: 220 } },
               },
             },
           },
         },
       },
     },
-    validationPerformed: { type: "array", maxItems: 6, items: { type: "string", maxLength: 350 } },
-    validationRemaining: { type: "array", maxItems: 6, items: { type: "string", maxLength: 350 } },
-    openQuestions: { type: "array", maxItems: 4, items: { type: "string", maxLength: 400 } },
+    validationPerformed: { type: "array", maxItems: 4, items: { type: "string", maxLength: 260 } },
+    validationRemaining: { type: "array", maxItems: 4, items: { type: "string", maxLength: 260 } },
+    openQuestions: { type: "array", maxItems: 3, items: { type: "string", maxLength: 300 } },
   },
 } as const;
 
@@ -158,7 +158,6 @@ function renderReview(artifact: DiffuinArtifact): string {
 }
 
 function renderPlan(artifact: DiffuinArtifact): string {
-  const evidence = section("Confirmed evidence", artifact.evidence);
   const choices = section("Design decisions", artifact.designChoices, true);
   const phases = artifact.phases.length
     ? `\n\n### Implementation\n\n${artifact.phases.map((phase, index) => {
@@ -170,7 +169,7 @@ function renderPlan(artifact: DiffuinArtifact): string {
     }).join("\n")}`
     : "";
   const questions = section("Implementation gates", artifact.openQuestions);
-  return `## Implementation plan\n\n### Summary\n\n${artifact.summary}${evidence}${choices}${phases}${renderValidation(artifact)}${questions}`;
+  return `## Implementation plan\n\n### Summary\n\n${artifact.summary}${choices}${phases}${questions}${renderEvidenceAndValidation(artifact)}`;
 }
 
 function renderResponse(artifact: DiffuinArtifact): string {
