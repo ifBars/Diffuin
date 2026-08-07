@@ -5,6 +5,11 @@ An `@Diffuin` mention asks Codex to review a pull request against game source,
 refine or plan an issue, answer a focused modding question, or implement an
 explicitly requested change.
 
+This is a personal review bot and project built for my own Schedule One modding
+workflow. It is not designed or supported as a general-purpose product for
+other users, but it is released under the MIT License, so anyone is welcome to
+use, modify, or adapt it for their own workflow.
+
 Diffuin combines the target repository's instructions with a bundled,
 public-safe Schedule One modding skill. At job time it refreshes shallow,
 read-only checkouts of the regular and beta stripped-source branches from
@@ -173,4 +178,7 @@ or other proprietary game artifacts.
 
 ## License
 
-MIT
+Diffuin is licensed under the MIT License. Although it was created for my
+personal workflow rather than as a product intended for general adoption, the
+license permits anyone to use, copy, modify, distribute, and adapt it subject
+to the license terms.
