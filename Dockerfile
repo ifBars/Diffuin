@@ -9,7 +9,7 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN bun run build
 
-FROM node:24-bookworm-slim AS runtime
+FROM node:24-trixie-slim AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git tini \
     && rm -rf /var/lib/apt/lists/*
