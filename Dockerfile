@@ -1,5 +1,8 @@
 FROM oven/bun:1.3.5 AS build
 WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends g++ make python3 \
+    && rm -rf /var/lib/apt/lists/*
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 COPY tsconfig.json ./
