@@ -1,5 +1,5 @@
 import { App } from "octokit";
-import type { GitHubPort, PullRequestContext, WorkRequest } from "./types.js";
+import type { GitHubPort, IssueContext, PullRequestContext, WorkRequest } from "./types.js";
 
 export class GitHubClient implements GitHubPort {
   private readonly app: App;
@@ -46,6 +46,16 @@ export class GitHubClient implements GitHubPort {
     const octokit = await this.installation(request);
     const response = await octokit.rest.repos.get({ owner: request.owner, repo: request.repo });
     return response.data.default_branch;
+  }
+
+  async getIssue(request: WorkRequest): Promise<IssueContext> {
+    const octokit = await this.installation(request);
+    const response = await octokit.rest.issues.get({
+      owner: request.owner,
+      repo: request.repo,
+      issue_number: request.issueNumber,
+    });
+    return { title: response.data.title, body: response.data.body ?? null };
   }
 
   async getPullRequest(request: WorkRequest): Promise<PullRequestContext> {

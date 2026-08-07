@@ -14,6 +14,9 @@ const schema = z.object({
   CODEX_MODEL: z.string().default("gpt-5.6-luna"),
   CODEX_REASONING_EFFORT: z.enum(["minimal", "low", "medium", "high", "xhigh", "max"]).default("max"),
   JOB_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(1000),
+  SCHEDULE_ONE_SKILL_PATH: z.string().min(1).default("./skills/schedule-one-modding"),
+  SCHEDULE_ONE_CODE_ARCHIVER_URL: z.string().url().default("https://github.com/k073l/s1-codearchiver.git"),
+  SCHEDULE_ONE_ASSETRIPPER_PATH: z.string().min(1).optional(),
 }).refine(
   (value) => Boolean(value.GITHUB_PRIVATE_KEY_PATH) !== Boolean(value.GITHUB_PRIVATE_KEY_BASE64),
   { message: "Set exactly one of GITHUB_PRIVATE_KEY_PATH or GITHUB_PRIVATE_KEY_BASE64" },
@@ -30,6 +33,9 @@ export interface Config {
   codexModel: string;
   codexReasoningEffort: "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
   jobPollIntervalMs: number;
+  scheduleOneSkillPath: string;
+  scheduleOneCodeArchiverUrl: string;
+  scheduleOneAssetRipperPath?: string | undefined;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config {
@@ -51,5 +57,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     codexModel: parsed.CODEX_MODEL,
     codexReasoningEffort: parsed.CODEX_REASONING_EFFORT,
     jobPollIntervalMs: parsed.JOB_POLL_INTERVAL_MS,
+    scheduleOneSkillPath: resolve(parsed.SCHEDULE_ONE_SKILL_PATH),
+    scheduleOneCodeArchiverUrl: parsed.SCHEDULE_ONE_CODE_ARCHIVER_URL,
+    scheduleOneAssetRipperPath: parsed.SCHEDULE_ONE_ASSETRIPPER_PATH
+      ? resolve(parsed.SCHEDULE_ONE_ASSETRIPPER_PATH)
+      : undefined,
   };
 }

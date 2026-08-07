@@ -6,12 +6,19 @@ import { GitHubClient } from "./github.js";
 import { createDiffuinServer } from "./server.js";
 import { JobStore } from "./store.js";
 import { Worker } from "./worker.js";
+import { ScheduleOneReferenceWorkspace } from "./references.js";
 
 const config = loadConfig();
 const store = new JobStore(join(config.dataDir, "diffuin.sqlite"));
 const github = new GitHubClient(config.githubAppId, config.githubPrivateKey, config.githubWebhookSecret);
 const codex = new CodexClient(config.codexModel, config.codexReasoningEffort, config.dataDir);
-const worker = new Worker(config, store, github, codex, new GitWorkspace(config.dataDir));
+const references = new ScheduleOneReferenceWorkspace(
+  config.dataDir,
+  config.scheduleOneSkillPath,
+  config.scheduleOneCodeArchiverUrl,
+  config.scheduleOneAssetRipperPath,
+);
+const worker = new Worker(config, store, github, codex, new GitWorkspace(config.dataDir), references);
 const server = createDiffuinServer(config, store, github);
 
 server.listen(config.port, "0.0.0.0", () => {

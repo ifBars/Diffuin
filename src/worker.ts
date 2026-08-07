@@ -4,6 +4,7 @@ import { assertNoSecrets } from "./secrets.js";
 import type { CodexPort, GitHubPort, Job, PullRequestContext } from "./types.js";
 import { GitWorkspace } from "./git.js";
 import { JobStore } from "./store.js";
+import { ScheduleOneReferenceWorkspace } from "./references.js";
 
 export class Worker {
   private stopped = false;
@@ -14,6 +15,7 @@ export class Worker {
     private readonly github: GitHubPort,
     private readonly codex: CodexPort,
     private readonly workspaces: GitWorkspace,
+    private readonly references: ScheduleOneReferenceWorkspace,
   ) {}
 
   async start(): Promise<void> {
@@ -36,6 +38,7 @@ export class Worker {
     let workspacePath: string | null = null;
     try {
       const pullRequest = job.kind === "pull_request" ? await this.github.getPullRequest(job) : null;
+      const issue = pullRequest ?? await this.github.getIssue(job);
       const defaultBranch = await this.github.getDefaultBranch(job);
       const sourceRef = pullRequest?.headSha ?? defaultBranch;
       const token = await this.github.getInstallationToken(job);
@@ -44,15 +47,20 @@ export class Worker {
         owner: job.owner,
         repo: job.repo,
         sourceRef,
+        comparisonRef: pullRequest?.baseBranch,
         token,
         issueNumber: job.issueNumber,
       });
       workspacePath = repository.path;
 
-      const result = await this.codex.run(repository.path, buildPrompt(job, pullRequest));
+      const references = await this.references.prepare();
+      const result = await this.codex.run(
+        repository.path,
+        buildPrompt(job, issue, pullRequest, references, repository.comparisonReference),
+      );
       assertNoSecrets(result.finalResponse);
       if (!(await this.workspaces.hasChanges(repository.path))) {
-        await this.github.comment(job, `Diffuin finished without making repository changes.\n\n${truncate(result.finalResponse)}`);
+        await this.github.comment(job, `Diffuin completed this request without repository changes.\n\n${truncate(result.finalResponse)}`);
         this.store.finish(job.id, "succeeded");
         return;
       }

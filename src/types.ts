@@ -28,13 +28,24 @@ export interface Job extends WorkRequest {
   error?: string;
 }
 
-export interface PullRequestContext {
+export interface IssueContext {
+  title: string;
+  body: string | null;
+}
+
+export interface PullRequestContext extends IssueContext {
   baseBranch: string;
   headBranch: string;
   headSha: string;
   headRepository: string;
-  title: string;
-  body: string | null;
+}
+
+export interface ScheduleOneReferences {
+  skillPath: string;
+  regularSourcePath?: string | undefined;
+  betaSourcePath?: string | undefined;
+  assetRipperPath?: string | undefined;
+  warnings: string[];
 }
 
 export interface GitHubPort {
@@ -42,6 +53,7 @@ export interface GitHubPort {
   addReaction(request: WorkRequest, reaction: "+1" | "eyes" | "rocket" | "confused"): Promise<void>;
   comment(request: WorkRequest, body: string): Promise<void>;
   getDefaultBranch(request: WorkRequest): Promise<string>;
+  getIssue(request: WorkRequest): Promise<IssueContext>;
   getPullRequest(request: WorkRequest): Promise<PullRequestContext>;
   getInstallationToken(request: WorkRequest): Promise<string>;
   createPullRequest(

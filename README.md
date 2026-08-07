@@ -1,12 +1,15 @@
 # Diffuin
 
-Diffuin is a small, self-hosted GitHub App that turns an `@Diffuin` mention into
-a Codex implementation job. It clones the repository into a fresh workspace,
-asks Codex to make and check the requested change, then pushes the result to a
-bot branch and opens a pull request.
+Diffuin is a small, self-hosted GitHub App for Schedule One mod repositories.
+An `@Diffuin` mention asks Codex to review a pull request against game source,
+refine or plan an issue, answer a focused modding question, or implement an
+explicitly requested change.
 
-It is intentionally generic: Codex is told to follow each repository's own
-`AGENTS.md`, contributing guide, and coding standards where applicable.
+Diffuin combines the target repository's instructions with a bundled,
+public-safe Schedule One modding skill. At job time it refreshes shallow,
+read-only checkouts of the regular and beta stripped-source branches from
+[S1CodeArchiver](https://github.com/k073l/s1-codearchiver). A local self-hosted
+instance may also mount an AssetRipper export read-only.
 
 ## What it does
 
@@ -16,10 +19,21 @@ It is intentionally generic: Codex is told to follow each repository's own
 3. Requires the repository to be allowlisted and the requesting actor to have
    write-equivalent permission.
 4. Queues the delivery idempotently in SQLite.
-5. Runs Codex in a fresh checkout with `workspace-write`, no approvals, and no
-   network access.
-6. scans the response and patch for common secret formats.
-7. Opens a pull request instead of writing to the target branch.
+5. Refreshes regular (`alternate`) and beta (`alternate-beta`) game-source
+   references before starting Codex.
+6. Runs Codex in a fresh checkout with `workspace-write`, no approvals, and no
+   network access. Reference directories are readable but outside the writable
+   checkout.
+7. For pull requests, fetches the base branch so Codex can review the complete
+   base-to-head diff.
+8. Scans the response and patch for common secret formats.
+9. Comments with read-only review/planning results, or opens a pull request only
+   when an explicitly requested implementation changed files.
+
+Diffuin does not have Schedule One or Unity. It must not claim in-game,
+Play Mode, Mono runtime, IL2CPP runtime, multiplayer, save/load, or full
+end-to-end validation. Its output separates source/static evidence from the
+manual runtime checks a maintainer still needs to perform.
 
 The default model is `gpt-5.6-luna` with `max` reasoning, configurable through
 environment variables.
@@ -53,9 +67,13 @@ Copy `.env.example` to `.env`. Required values are:
 | `GITHUB_PRIVATE_KEY_BASE64` | Hosted alternative to the path; set exactly one private-key option |
 | `GITHUB_WEBHOOK_SECRET` | HMAC secret configured on the App |
 | `ALLOWED_REPOSITORIES` | Comma-separated `owner/repository` allowlist |
+| `SCHEDULE_ONE_SKILL_PATH` | Bundled Schedule One skill directory; defaults to `./skills/schedule-one-modding` |
+| `SCHEDULE_ONE_CODE_ARCHIVER_URL` | Runtime source for regular/beta stripped-code references |
+| `SCHEDULE_ONE_ASSETRIPPER_PATH` | Optional read-only AssetRipper export mount for local/self-hosted use |
 
-`DIFFUIN_HANDLE`, `DATA_DIR`, `CODEX_MODEL`, `CODEX_REASONING_EFFORT`, and the
-port have safe defaults shown in `.env.example`.
+`DIFFUIN_HANDLE`, `DATA_DIR`, `CODEX_MODEL`, `CODEX_REASONING_EFFORT`, the
+Schedule One reference settings, and the port have defaults shown in
+`.env.example`.
 
 ## Run with Docker Compose
 
@@ -74,6 +92,18 @@ persistent `/data/codex-home` volume. Treat that volume like a password.
 Expose port 8787 through an HTTPS reverse proxy and update the GitHub App's
 webhook URL. Verify `GET /health` before installing the App.
 
+To enable local AssetRipper evidence, mount the existing export outside `/app`
+and set its container path. Never copy it into this repository or image:
+
+```yaml
+services:
+  diffuin:
+    environment:
+      SCHEDULE_ONE_ASSETRIPPER_PATH: /references/assetripper
+    volumes:
+      - /absolute/local/AssetRipper_export:/references/assetripper:ro
+```
+
 ## Hosted deployment
 
 Build from the included `Dockerfile`, expose port `8787`, and attach a
@@ -88,19 +118,32 @@ codex login --device-auth
 ```
 
 Complete the displayed device flow in your browser. The `/data` volume must
-persist across deployments so Codex can refresh its login and the job queue is
-not lost.
+persist across deployments so Codex can refresh its login, retain the reference
+cache, and preserve the job queue.
+
+Do not upload an AssetRipper export to a hosted deployment. The default hosted
+configuration uses the runtime-cloned CodeArchiver source plus the bundled
+skill, and reports serialized evidence as unavailable.
 
 ## Use
 
-On an issue or pull request conversation:
+Typical review and planning requests are read-only:
+
+```text
+@Diffuin review this against the regular and beta game source
+@Diffuin polish this issue into an implementation-ready plan
+@Diffuin identify the Mono/IL2CPP and save/load risks in this proposal
+```
+
+Implementation remains explicit:
 
 ```text
 @Diffuin fix the null dereference and add a regression test
 ```
 
-Diffuin reacts with eyes when the request is queued and comments with the pull
-request URL when it finishes.
+Diffuin reacts with eyes when the request is queued. It comments with the review
+or plan when no files changed, and posts a pull-request URL when an explicit
+implementation request produced a patch.
 
 ## Development
 
@@ -114,13 +157,19 @@ bun run build
 The application runtime is Node.js 24 because that is the supported server-side
 runtime for the Codex SDK. Bun is used for package management and scripts.
 
-## Security note
+## Security and game-artifact boundary
 
 OpenAI recommends API keys as the default for automation and warns that
 ChatGPT-managed authentication should not be used for arbitrary public or
 open-source repository runners. Diffuin's subscription-auth path is intended
 for a trusted operator, an explicit repository allowlist, and trusted
 write-authorized requesters. See [SECURITY.md](SECURITY.md) before deploying.
+
+The bundled skill contains guidance only. Stripped source is cloned into the
+persistent runtime reference cache and AssetRipper is an optional external
+mount. Do not commit, package, attach, or redistribute decompiled game code,
+assemblies, generated wrappers, AssetRipper exports, prefabs, scenes, textures,
+or other proprietary game artifacts.
 
 ## License
 

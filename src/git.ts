@@ -11,6 +11,7 @@ export interface PreparedRepository {
   path: string;
   branch: string;
   remoteUrl: string;
+  comparisonReference?: string | undefined;
 }
 
 export class GitWorkspace {
@@ -25,6 +26,7 @@ export class GitWorkspace {
     owner: string;
     repo: string;
     sourceRef: string;
+    comparisonRef?: string | undefined;
     token: string;
     issueNumber: number;
   }): Promise<PreparedRepository> {
@@ -40,10 +42,19 @@ export class GitWorkspace {
     await this.git(["clone", "--no-checkout", "--filter=blob:none", remoteUrl, path], dirname(path), auth);
     await this.git(["fetch", "--no-tags", "origin", input.sourceRef], path, auth);
     await this.git(["checkout", "-b", branch, "FETCH_HEAD"], path);
+    let comparisonReference: string | undefined;
+    if (input.comparisonRef) {
+      comparisonReference = "refs/diffuin/base";
+      await this.git(
+        ["fetch", "--no-tags", "origin", `+refs/heads/${input.comparisonRef}:${comparisonReference}`],
+        path,
+        auth,
+      );
+    }
     await this.git(["config", "user.name", "Diffuin[bot]"], path);
     await this.git(["config", "user.email", "diffuin[bot]@users.noreply.github.com"], path);
     await makeTreeReadOnly(join(path, ".git"));
-    return { path, branch, remoteUrl };
+    return { path, branch, remoteUrl, comparisonReference };
   }
 
   async hasChanges(path: string): Promise<boolean> {
