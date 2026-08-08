@@ -39,20 +39,29 @@ const references: ScheduleOneReferences = {
   skillPath: "/app/skills/schedule-one-modding",
   regularSourcePath: "/data/references/alternate/ScheduleOne-stripped",
   betaSourcePath: "/data/references/alternate-beta/ScheduleOne-stripped",
-  relatedRepositories: [{ repository: "ifBars/MoreDrugs", path: "/data/references/related/ifBars-MoreDrugs" }],
   warnings: [],
 };
 
 describe("buildPrompt", () => {
   it("frames PR work as source-backed review without runtime claims", () => {
-    const prompt = buildPrompt(job, pullRequest, pullRequest, references, "refs/diffuin/base");
+    const prompt = buildPrompt(
+      job,
+      pullRequest,
+      pullRequest,
+      references,
+      "refs/diffuin/base",
+      undefined,
+      ["ifBars/S1API", "ifBars/MoreDrugs"],
+    );
 
     assert.match(prompt, /Schedule One modding review and issue-planning agent/);
     assert.match(prompt, /git diff --find-renames refs\/diffuin\/base\.\.\.HEAD/);
     assert.match(prompt, /Never claim an in-game, Play Mode, Mono runtime, IL2CPP runtime/);
     assert.match(prompt, /Read \/app\/skills\/schedule-one-modding\/SKILL\.md first/);
     assert.match(prompt, /Regular stripped source: \/data\/references\/alternate/);
-    assert.match(prompt, /Related mod source \(ifBars\/MoreDrugs\)/);
+    assert.match(prompt, /Read-only GitHub evidence/);
+    assert.match(prompt, /ifBars\/MoreDrugs/);
+    assert.match(prompt, /diffuin_github/);
     assert.match(prompt, /Do not edit files for review, explanation, investigation, or planning requests/);
     assert.match(prompt, /review-pull-request[\\/]SKILL\.md/);
   });

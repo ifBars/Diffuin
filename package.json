@@ -12,13 +12,16 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.5",
     "@openai/codex-sdk": "^0.147.0",
     "better-sqlite3": "^12.2.0",
+    "express": "^5.2.1",
     "octokit": "^5.0.3",
     "zod": "^4.0.17"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.3.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"

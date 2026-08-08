@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Worker } from "../src/worker.js";
 import type { Config } from "../src/config.js";
-import type { CodexPort, GitHubPort, Job } from "../src/types.js";
+import type { CodexPort, GitHubPort, GitHubReadBrokerPort, Job } from "../src/types.js";
 import type { GitWorkspace } from "../src/git.js";
 import type { JobStore } from "../src/store.js";
 import type { ScheduleOneReferenceWorkspace } from "../src/references.js";
@@ -47,11 +47,29 @@ const response = JSON.stringify({
   openQuestions: [],
 });
 
+const githubReadBroker: GitHubReadBrokerPort = {
+  openSession: () => ({
+    url: "http://127.0.0.1:12345/mcp",
+    token: "session-token",
+    repositories: ["ifBars/S1API"],
+    close: () => undefined,
+  }),
+};
+
 describe("Worker review delivery", () => {
   it("edits the progress comment and posts native inline findings", async () => {
     const updates: string[] = [];
     const inline: Array<{ path: string; line: number; body: string }> = [];
     let finished = "";
+    let readSessionClosed = false;
+    const trackedReadBroker: GitHubReadBrokerPort = {
+      openSession: () => ({
+        url: "http://127.0.0.1:12345/mcp",
+        token: "session-token",
+        repositories: ["ifBars/S1API"],
+        close: () => { readSessionClosed = true; },
+      }),
+    };
     const github: GitHubPort = {
       getActorPermission: async () => "write",
       addReaction: async () => undefined,
@@ -79,6 +97,7 @@ describe("Worker review delivery", () => {
     const codex: CodexPort = {
       run: async (_directory, _prompt, options) => {
         assert.equal(options.reasoningEffort, "medium");
+        assert.equal(options.githubReadSession?.token, "session-token");
         return { finalResponse: response, threadId: "thread" };
       },
     };
@@ -108,16 +127,16 @@ describe("Worker review delivery", () => {
       jobPollIntervalMs: 1000,
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/s1-codearchiver.git",
-      scheduleOneRelatedRepositories: [],
     };
 
-    await new Worker(config, store, github, codex, workspaces, references).process(job);
+    await new Worker(config, store, github, codex, workspaces, references, trackedReadBroker).process(job);
 
     assert.equal(finished, "succeeded");
     assert.equal(inline.length, 1);
     assert.match(updates[0] ?? "", /## Diffuin review/);
     assert.match(updates[0] ?? "", /AI notice/);
     assert.doesNotMatch(updates[0] ?? "", /truncated/);
+    assert.equal(readSessionClosed, true);
   });
 
   it("turns an open-PR issue follow-up into a patch against the requested branch", async () => {
@@ -201,10 +220,9 @@ describe("Worker review delivery", () => {
       jobPollIntervalMs: 1000,
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/s1-codearchiver.git",
-      scheduleOneRelatedRepositories: [],
     };
 
-    await new Worker(config, store, github, codex, workspaces, references).process(implementationJob);
+    await new Worker(config, store, github, codex, workspaces, references, githubReadBroker).process(implementationJob);
 
     assert.equal(preparedSource, "stable");
     assert.equal(pullRequestBase, "stable");
@@ -262,10 +280,10 @@ describe("Worker review delivery", () => {
       codexModel: "gpt-5.6-luna", allowedCodexModels: new Set(["gpt-5.6-luna"]),
       codexReasoningEffort: "max" as const, autoReasoningRouting: true, jobPollIntervalMs: 1000,
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
-      scheduleOneCodeArchiverUrl: "https://example.test/archive.git", scheduleOneRelatedRepositories: [],
+      scheduleOneCodeArchiverUrl: "https://example.test/archive.git",
     } satisfies Config;
 
-    await new Worker(config, store, github, codex, workspaces, references).process(issueJob);
+    await new Worker(config, store, github, codex, workspaces, references, githubReadBroker).process(issueJob);
 
     assert.deepEqual(updatedIssue, {
       title: "[BUG] Custom NPC enters owned properties",

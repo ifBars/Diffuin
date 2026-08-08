@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ThreadEvent } from "@openai/codex-sdk";
-import { readFinalResponse } from "../src/codex.js";
+import { buildCodexConfig, readFinalResponse } from "../src/codex.js";
 
 describe("readFinalResponse", () => {
   it("retains only the latest completed agent message", async () => {
@@ -30,6 +30,27 @@ describe("readFinalResponse", () => {
       readFinalResponse(stream([{ type: "turn.failed", error: { message: "worker terminated" } }])),
       /worker terminated/,
     );
+  });
+});
+
+describe("buildCodexConfig", () => {
+  it("registers only the short-lived read broker credential", () => {
+    const config = buildCodexConfig("xhigh", {
+      url: "http://127.0.0.1:3210/mcp",
+      token: "not-part-of-config",
+      repositories: ["ifBars/S1API"],
+      close: () => undefined,
+    });
+
+    assert.deepEqual(config.mcp_servers, {
+      diffuin_github: {
+        url: "http://127.0.0.1:3210/mcp",
+        bearer_token_env_var: "DIFFUIN_GITHUB_READ_TOKEN",
+        enabled: true,
+        required: true,
+      },
+    });
+    assert.doesNotMatch(JSON.stringify(config), /not-part-of-config/);
   });
 });
 

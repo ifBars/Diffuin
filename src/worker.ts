@@ -3,7 +3,7 @@ import type { Config } from "./config.js";
 import { buildPrompt } from "./prompt.js";
 import { routeExecution } from "./routing.js";
 import { assertNoSecrets } from "./secrets.js";
-import type { CodexPort, GitHubPort, Job, PullRequestContext } from "./types.js";
+import type { CodexPort, GitHubPort, GitHubReadBrokerPort, GitHubReadSession, Job, PullRequestContext } from "./types.js";
 import { GitWorkspace } from "./git.js";
 import { JobStore } from "./store.js";
 import { ScheduleOneReferenceWorkspace } from "./references.js";
@@ -18,6 +18,7 @@ export class Worker {
     private readonly codex: CodexPort,
     private readonly workspaces: GitWorkspace,
     private readonly references: ScheduleOneReferenceWorkspace,
+    private readonly githubReadBroker: GitHubReadBrokerPort,
   ) {}
 
   async start(): Promise<void> {
@@ -38,11 +39,13 @@ export class Worker {
 
   async process(job: Job): Promise<void> {
     let workspacePath: string | null = null;
+    let githubReadSession: GitHubReadSession | null = null;
     let statusCommentId: number | null = null;
     const startedAt = Date.now();
     try {
       const pullRequest = job.kind === "pull_request" ? await this.github.getPullRequest(job) : null;
       const issue = pullRequest ?? await this.github.getIssue(job);
+      githubReadSession = this.githubReadBroker.openSession(job, issue);
       const route = routeExecution(job, issue, pullRequest, this.config);
       statusCommentId = await this.github.comment(
         job,
@@ -68,8 +71,21 @@ export class Worker {
       const references = await this.references.prepare();
       const result = await this.codex.run(
         repository.path,
-        buildPrompt(job, issue, pullRequest, references, repository.comparisonReference, route),
-        { model: route.model, reasoningEffort: route.reasoningEffort, outputSchema: artifactOutputSchema },
+        buildPrompt(
+          job,
+          issue,
+          pullRequest,
+          references,
+          repository.comparisonReference,
+          route,
+          githubReadSession.repositories,
+        ),
+        {
+          model: route.model,
+          reasoningEffort: route.reasoningEffort,
+          outputSchema: artifactOutputSchema,
+          githubReadSession,
+        },
       );
       assertNoSecrets(result.finalResponse);
       const artifact = parseArtifact(result.finalResponse);
@@ -143,6 +159,7 @@ export class Worker {
         `Diffuin could not complete this request.\n\n\`${escapeInline(message)}\``,
       ).catch(() => undefined);
     } finally {
+      githubReadSession?.close();
       if (workspacePath) {
         await this.workspaces.cleanup(workspacePath).catch(() => undefined);
       }

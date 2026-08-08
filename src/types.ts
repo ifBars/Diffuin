@@ -66,8 +66,26 @@ export interface ScheduleOneReferences {
   regularSourcePath?: string | undefined;
   betaSourcePath?: string | undefined;
   assetRipperPath?: string | undefined;
-  relatedRepositories?: Array<{ repository: string; path: string }>;
   warnings: string[];
+}
+
+export interface GitHubReadSource {
+  readRepository(request: WorkRequest, repository: string): Promise<unknown>;
+  readFile(request: WorkRequest, repository: string, path: string, ref?: string): Promise<unknown>;
+  searchCode(request: WorkRequest, repository: string, query: string): Promise<unknown>;
+  readIssue(request: WorkRequest, repository: string, number: number): Promise<unknown>;
+  readPullRequest(request: WorkRequest, repository: string, number: number): Promise<unknown>;
+}
+
+export interface GitHubReadSession {
+  url: string;
+  token: string;
+  repositories: readonly string[];
+  close(): void;
+}
+
+export interface GitHubReadBrokerPort {
+  openSession(request: WorkRequest, context: IssueContext): GitHubReadSession;
 }
 
 export interface GitHubPort {
@@ -100,6 +118,11 @@ export interface CodexPort {
   run(
     workingDirectory: string,
     prompt: string,
-    options: { model: string; reasoningEffort: ReasoningEffort; outputSchema: object },
+    options: {
+      model: string;
+      reasoningEffort: ReasoningEffort;
+      outputSchema: object;
+      githubReadSession?: GitHubReadSession;
+    },
   ): Promise<CodexResult>;
 }

@@ -13,10 +13,10 @@ use, modify, or adapt it for their own workflow.
 Diffuin combines the target repository's instructions with a bundled,
 public-safe Schedule One modding skill. At job time it refreshes shallow,
 read-only checkouts of the regular and beta stripped-source branches from
-[S1CodeArchiver](https://github.com/k073l/s1-codearchiver), plus a
-deployment-owned allowlist of related public mod repositories such as
-`ifBars/MoreDrugs`. A local self-hosted instance may also mount an AssetRipper
-export read-only.
+[S1CodeArchiver](https://github.com/k073l/s1-codearchiver). A local self-hosted
+instance may also mount an AssetRipper export read-only. For repositories,
+issues, pull requests, and files explicitly linked in the request or its
+conversation, Diffuin exposes a session-scoped, read-only GitHub tool broker.
 
 ## What it does
 
@@ -28,18 +28,22 @@ export read-only.
 4. Queues the delivery idempotently in SQLite.
 5. Refreshes regular (`alternate`) and beta (`alternate-beta`) game-source
    references before starting Codex.
-6. Runs Codex in a fresh checkout with `workspace-write`, no approvals, and no
-   network access. Reference directories are readable but outside the writable
-   checkout.
-7. For pull requests, fetches the base branch so Codex can review the complete
+6. Starts a short-lived localhost GitHub read session scoped to the current and
+   explicitly mentioned repositories. Public repositories are readable;
+   private repositories additionally require the requesting actor to have
+   access through the App installation.
+7. Runs Codex in a fresh checkout with `workspace-write`, no approvals, and no
+   general network access. Reference directories are readable but outside the
+   writable checkout. The only remote research surface is the read-only broker.
+8. For pull requests, fetches the base branch so Codex can review the complete
    base-to-head diff.
-8. Scans the response and patch for common secret formats.
-9. Routes the request through a dedicated issue-review, issue-implementation,
+9. Scans the response and patch for common secret formats.
+10. Routes the request through a dedicated issue-review, issue-implementation,
    or pull-request-review skill, then selects reasoning effort from task shape
    and PR size unless the mention supplies an authorized override.
-10. Edits a single status comment into a compact review or plan. PR findings
+11. Edits a single status comment into a compact review or plan. PR findings
     are posted on the relevant diff lines when GitHub accepts the location.
-11. Opens a pull request only when an explicitly requested implementation
+12. Opens a pull request only when an explicitly requested implementation
     changed files. Read-only review and planning jobs refuse to publish patches.
 
 Diffuin does not have Schedule One or Unity. It must not claim in-game,
@@ -88,11 +92,18 @@ Copy `.env.example` to `.env`. Required values are:
 | `CODEX_REASONING_EFFORT` | Fixed fallback used when automatic routing is disabled |
 | `SCHEDULE_ONE_SKILL_PATH` | Bundled Schedule One skill directory; defaults to `./skills/schedule-one-modding` |
 | `SCHEDULE_ONE_CODE_ARCHIVER_URL` | Runtime source for regular/beta stripped-code references |
-| `SCHEDULE_ONE_RELATED_REPOSITORIES` | Comma-separated, deployment-owned public GitHub repository URLs made available read-only; defaults to `ifBars/MoreDrugs` |
 | `SCHEDULE_ONE_ASSETRIPPER_PATH` | Optional read-only AssetRipper export mount for local/self-hosted use |
 
 `DIFFUIN_HANDLE`, `DATA_DIR`, the Codex routing settings, the Schedule One
 reference settings, and the port have defaults shown in `.env.example`.
+
+The GitHub broker binds only to `127.0.0.1`. Codex receives a random session
+credential that expires after 30 minutes and is destroyed when the job ends;
+it never receives the GitHub App installation token. The broker has no mutation
+tools, limits repositories and response sizes, strips search scope qualifiers,
+and rejects unmentioned repositories. Arbitrary public GitHub links can be
+researched without adding them to `ALLOWED_REPOSITORIES`; that allowlist still
+controls where Diffuin accepts mentions and publishes results.
 
 ## Run with Docker Compose
 

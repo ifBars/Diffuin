@@ -1,6 +1,6 @@
-import { Codex, type ThreadEvent } from "@openai/codex-sdk";
+import { Codex, type CodexOptions, type ThreadEvent } from "@openai/codex-sdk";
 import { join } from "node:path";
-import type { CodexPort, CodexResult, ReasoningEffort } from "./types.js";
+import type { CodexPort, CodexResult, GitHubReadSession, ReasoningEffort } from "./types.js";
 import { sanitizedEnvironment } from "./environment.js";
 
 export class CodexClient implements CodexPort {
@@ -9,14 +9,22 @@ export class CodexClient implements CodexPort {
   async run(
     workingDirectory: string,
     prompt: string,
-    options: { model: string; reasoningEffort: ReasoningEffort; outputSchema: object },
+    options: {
+      model: string;
+      reasoningEffort: ReasoningEffort;
+      outputSchema: object;
+      githubReadSession?: GitHubReadSession;
+    },
   ): Promise<CodexResult> {
+    const config = buildCodexConfig(options.reasoningEffort, options.githubReadSession);
     const codex = new Codex({
-      config: {
-        model_reasoning_effort: options.reasoningEffort,
-        features: { apps: false, plugins: false },
-      },
-      env: sanitizedEnvironment({ CODEX_HOME: join(this.dataDir, "codex-home") }),
+      config,
+      env: sanitizedEnvironment({
+        CODEX_HOME: join(this.dataDir, "codex-home"),
+        ...(options.githubReadSession
+          ? { DIFFUIN_GITHUB_READ_TOKEN: options.githubReadSession.token }
+          : {}),
+      }),
     });
     const thread = codex.startThread({
       model: options.model,
@@ -33,6 +41,26 @@ export class CodexClient implements CodexPort {
     }
     return { finalResponse, threadId: thread.id };
   }
+}
+
+export function buildCodexConfig(
+  reasoningEffort: ReasoningEffort,
+  session?: GitHubReadSession,
+): NonNullable<CodexOptions["config"]> {
+  return {
+    model_reasoning_effort: reasoningEffort,
+    features: { apps: false, plugins: false },
+    ...(session ? {
+      mcp_servers: {
+        diffuin_github: {
+          url: session.url,
+          bearer_token_env_var: "DIFFUIN_GITHUB_READ_TOKEN",
+          enabled: true,
+          required: true,
+        },
+      },
+    } : {}),
+  };
 }
 
 export async function readFinalResponse(events: AsyncIterable<ThreadEvent>): Promise<string> {
