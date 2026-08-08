@@ -1,5 +1,5 @@
 export type TriggerKind = "issue" | "pull_request";
-export type TaskMode = "auto" | "review" | "plan" | "implement" | "answer";
+export type TaskMode = "auto" | "review" | "investigate" | "plan" | "implement" | "answer";
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface MentionCommand {
@@ -41,6 +41,13 @@ export interface Job extends WorkRequest {
 export interface IssueContext {
   title: string;
   body: string | null;
+  comments?: IssueCommentContext[];
+}
+
+export interface IssueCommentContext {
+  id: number;
+  author: string;
+  body: string;
 }
 
 export interface PullRequestContext extends IssueContext {
@@ -59,6 +66,7 @@ export interface ScheduleOneReferences {
   regularSourcePath?: string | undefined;
   betaSourcePath?: string | undefined;
   assetRipperPath?: string | undefined;
+  relatedRepositories?: Array<{ repository: string; path: string }>;
   warnings: string[];
 }
 
@@ -75,6 +83,7 @@ export interface GitHubPort {
   getDefaultBranch(request: WorkRequest): Promise<string>;
   getIssue(request: WorkRequest): Promise<IssueContext>;
   getPullRequest(request: WorkRequest): Promise<PullRequestContext>;
+  updateIssue(request: WorkRequest, input: { title: string; body: string }): Promise<void>;
   getInstallationToken(request: WorkRequest): Promise<string>;
   createPullRequest(
     request: WorkRequest,

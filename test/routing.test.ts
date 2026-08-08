@@ -69,6 +69,33 @@ describe("routeExecution", () => {
     );
   });
 
+  it("treats an open-PR follow-up as implementation", () => {
+    const implementation = {
+      ...job,
+      kind: "issue" as const,
+      mode: "auto" as const,
+      task: "Open a PR against stable to fix the persistence issue.",
+    };
+    assert.equal(routeExecution(implementation, { title: "Persistence bug", body: "Saved state resets." }, null, config).mode, "implement");
+  });
+
+  it("routes source-backed issue research above a focused answer", () => {
+    const investigation = {
+      ...job,
+      kind: "issue" as const,
+      mode: "auto" as const,
+      task: "Research this issue accordingly.",
+    };
+    const route = routeExecution(
+      investigation,
+      { title: "IL2CPP NPC lifecycle bug", body: "A custom NPC enters the property unexpectedly." },
+      null,
+      config,
+    );
+    assert.equal(route.mode, "investigate");
+    assert.equal(route.reasoningEffort, "xhigh");
+  });
+
   it("uses the configured fallback when automatic routing is disabled", () => {
     assert.equal(
       routeExecution(job, pullRequest(), pullRequest(), { ...config, autoReasoningRouting: false }).reasoningEffort,

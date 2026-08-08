@@ -17,6 +17,7 @@ export class ScheduleOneReferenceWorkspace {
     dataDir: string,
     skillPath: string,
     private readonly codeArchiverUrl: string,
+    private readonly relatedRepositoryUrls: string[],
     assetRipperPath?: string,
   ) {
     this.root = resolve(dataDir, "references");
@@ -38,12 +39,21 @@ export class ScheduleOneReferenceWorkspace {
       return undefined;
     });
     const assetRipperPath = await this.resolveAssetRipperPath(warnings);
+    const relatedRepositories: Array<{ repository: string; path: string }> = [];
+    for (const url of this.relatedRepositoryUrls.slice(0, 5)) {
+      try {
+        relatedRepositories.push(await this.prepareRelatedRepository(url));
+      } catch (error) {
+        warnings.push(`Related repository unavailable (${url}): ${errorMessage(error)}`);
+      }
+    }
 
     return {
       skillPath: this.skillPath,
       regularSourcePath,
       betaSourcePath,
       assetRipperPath,
+      relatedRepositories,
       warnings,
     };
   }
@@ -92,6 +102,25 @@ export class ScheduleOneReferenceWorkspace {
     }
   }
 
+  private async prepareRelatedRepository(url: string): Promise<{ repository: string; path: string }> {
+    const parsed = parseGitHubRepository(url);
+    const path = resolve(this.root, "related", `${parsed.owner}-${parsed.repo}`);
+    this.assertContained(path);
+    await mkdir(resolve(this.root, "related"), { recursive: true });
+
+    if (!(await exists(join(path, ".git")))) {
+      if (await exists(path)) {
+        await rm(path, { recursive: true, force: true, maxRetries: 3 });
+      }
+      await this.git(["clone", "--depth", "1", parsed.url, path], resolve(this.root, "related"));
+    } else {
+      await this.git(["remote", "set-url", "origin", parsed.url], path);
+      await this.git(["fetch", "--depth", "1", "--no-tags", "origin", "HEAD"], path);
+      await this.git(["checkout", "--detach", "--force", "FETCH_HEAD"], path);
+    }
+    return { repository: `${parsed.owner}/${parsed.repo}`, path };
+  }
+
   private async git(args: string[], cwd: string): Promise<void> {
     await execFileAsync("git", args, {
       cwd,
@@ -122,4 +151,16 @@ async function exists(path: string): Promise<boolean> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function parseGitHubRepository(value: string): { owner: string; repo: string; url: string } {
+  const url = new URL(value);
+  const parts = url.pathname.replace(/^\/+|\/+$/g, "").split("/");
+  const owner = parts[0] ?? "";
+  const repo = (parts[1] ?? "").replace(/\.git$/i, "");
+  if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "github.com" || parts.length !== 2 ||
+      !/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) {
+    throw new Error("expected an HTTPS github.com owner/repository URL");
+  }
+  return { owner, repo, url: `https://github.com/${owner}/${repo}.git` };
 }

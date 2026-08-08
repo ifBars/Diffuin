@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Issue"
+  short_description: "Polish, investigate, and plan GitHub issues"
+  default_prompt: "Use $review-issue to investigate this issue and return an evidence-backed response."

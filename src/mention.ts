@@ -1,6 +1,6 @@
 import type { MentionCommand, ReasoningEffort, TaskMode } from "./types.js";
 
-const MODES = new Set<TaskMode>(["review", "plan", "implement", "answer"]);
+const MODES = new Set<TaskMode>(["review", "investigate", "plan", "implement", "answer"]);
 const EFFORTS = new Set<ReasoningEffort>(["minimal", "low", "medium", "high", "xhigh", "max"]);
 
 export function parseMention(body: string, handle: string): MentionCommand | null {
@@ -76,6 +76,7 @@ function invalid(mode: TaskMode, error: string): MentionCommand {
 function defaultTask(mode: TaskMode): string {
   switch (mode) {
     case "review": return "review this pull request";
+    case "investigate": return "investigate the likely cause of this issue";
     case "plan": return "produce an implementation plan for this issue";
     case "implement": return "implement the requested change";
     case "answer": return "answer the request";

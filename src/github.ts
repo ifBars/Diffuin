@@ -1,5 +1,5 @@
 import { App } from "octokit";
-import type { GitHubPort, IssueContext, PullRequestContext, WorkRequest } from "./types.js";
+import type { GitHubPort, IssueCommentContext, IssueContext, PullRequestContext, WorkRequest } from "./types.js";
 
 export class GitHubClient implements GitHubPort {
   private readonly app: App;
@@ -82,7 +82,11 @@ export class GitHubClient implements GitHubPort {
       repo: request.repo,
       issue_number: request.issueNumber,
     });
-    return { title: response.data.title, body: response.data.body ?? null };
+    return {
+      title: response.data.title,
+      body: response.data.body ?? null,
+      comments: await this.getConversation(request),
+    };
   }
 
   async getPullRequest(request: WorkRequest): Promise<PullRequestContext> {
@@ -109,7 +113,19 @@ export class GitHubClient implements GitHubPort {
       deletions: response.data.deletions,
       changedFiles: response.data.changed_files,
       files,
+      comments: await this.getConversation(request),
     };
+  }
+
+  async updateIssue(request: WorkRequest, input: { title: string; body: string }): Promise<void> {
+    const octokit = await this.installation(request);
+    await octokit.rest.issues.update({
+      owner: request.owner,
+      repo: request.repo,
+      issue_number: request.issueNumber,
+      title: input.title,
+      body: input.body,
+    });
   }
 
   async getInstallationToken(request: WorkRequest): Promise<string> {
@@ -139,4 +155,27 @@ export class GitHubClient implements GitHubPort {
     });
     return { number: response.data.number, url: response.data.html_url };
   }
+
+  private async getConversation(request: WorkRequest): Promise<IssueCommentContext[]> {
+    const octokit = await this.installation(request);
+    const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+      owner: request.owner,
+      repo: request.repo,
+      issue_number: request.issueNumber,
+      per_page: 100,
+    }, (page) => page.data.map((comment) => ({
+      id: comment.id,
+      author: comment.user?.login ?? "unknown",
+      body: compactContext(comment.body ?? ""),
+    })));
+    return comments.slice(-8);
+  }
+}
+
+function compactContext(body: string): string {
+  const limit = 12_000;
+  if (body.length <= limit) return body;
+  const boundary = body.lastIndexOf("\n\n", limit);
+  const end = boundary >= 8_000 ? boundary : limit;
+  return `${body.slice(0, end)}\n\n[Earlier comment shortened for prompt context.]`;
 }

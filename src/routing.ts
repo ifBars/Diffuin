@@ -59,6 +59,16 @@ export function routeExecution(
     };
   }
 
+  if (mode === "investigate") {
+    const complex = riskMatches >= 1 || text.length > 1_200;
+    return {
+      mode,
+      model,
+      reasoningEffort: complex ? "xhigh" : "high",
+      reason: complex ? "non-trivial source-backed investigation" : "focused source-backed investigation",
+    };
+  }
+
   if (mode === "review" && pullRequest) {
     if (pullRequest.changedFiles >= 20 || changedLines >= 2_000 || riskMatches >= 8) {
       return { mode, model, reasoningEffort: "max", reason: "large or high-risk pull request" };
@@ -92,14 +102,21 @@ export function routeExecution(
 }
 
 function inferMode(job: Job): Exclude<TaskMode, "auto"> {
-  if (/^(?:please\s+)?(implement|fix|change|add|remove|refactor|update|write)\b/i.test(job.task.trim())) {
+  const task = job.task.trim();
+  if (
+    /\b(?:open|create|raise|submit|make)\s+(?:a\s+)?(?:pr|pull request)\b/i.test(task) ||
+    /^(?:(?:please|can you|could you|would you)\s+)?(?:implement|fix|change|add|remove|refactor|update|write)\b/i.test(task)
+  ) {
     return "implement";
   }
   if (job.kind === "pull_request") {
     return "review";
   }
-  if (/\b(plan|planning|polish|scope|acceptance criteria|implementation-ready|roadmap)\b/i.test(job.task)) {
+  if (/\b(plan|planning|polish|scope|acceptance criteria|implementation-ready|roadmap)\b/i.test(task)) {
     return "plan";
+  }
+  if (/\b(investigate|research|diagnose|root cause|analy[sz]e(?: this)? issue)\b/i.test(task)) {
+    return "investigate";
   }
   return "answer";
 }

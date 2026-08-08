@@ -16,6 +16,7 @@ const references = new ScheduleOneReferenceWorkspace(
   config.dataDir,
   config.scheduleOneSkillPath,
   config.scheduleOneCodeArchiverUrl,
+  config.scheduleOneRelatedRepositories,
   config.scheduleOneAssetRipperPath,
 );
 const worker = new Worker(config, store, github, codex, new GitWorkspace(config.dataDir), references);

@@ -19,6 +19,7 @@ const schema = z.object({
   JOB_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(1000),
   SCHEDULE_ONE_SKILL_PATH: z.string().min(1).default("./skills/schedule-one-modding"),
   SCHEDULE_ONE_CODE_ARCHIVER_URL: z.string().url().default("https://github.com/k073l/s1-codearchiver.git"),
+  SCHEDULE_ONE_RELATED_REPOSITORIES: z.string().default("https://github.com/ifBars/MoreDrugs.git"),
   SCHEDULE_ONE_ASSETRIPPER_PATH: z.string().min(1).optional(),
 }).refine(
   (value) => Boolean(value.GITHUB_PRIVATE_KEY_PATH) !== Boolean(value.GITHUB_PRIVATE_KEY_BASE64),
@@ -40,6 +41,7 @@ export interface Config {
   jobPollIntervalMs: number;
   scheduleOneSkillPath: string;
   scheduleOneCodeArchiverUrl: string;
+  scheduleOneRelatedRepositories: string[];
   scheduleOneAssetRipperPath?: string | undefined;
 }
 
@@ -70,6 +72,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     jobPollIntervalMs: parsed.JOB_POLL_INTERVAL_MS,
     scheduleOneSkillPath: resolve(parsed.SCHEDULE_ONE_SKILL_PATH),
     scheduleOneCodeArchiverUrl: parsed.SCHEDULE_ONE_CODE_ARCHIVER_URL,
+    scheduleOneRelatedRepositories: parsed.SCHEDULE_ONE_RELATED_REPOSITORIES
+      .split(",").map((value) => value.trim()).filter(Boolean),
     scheduleOneAssetRipperPath: parsed.SCHEDULE_ONE_ASSETRIPPER_PATH
       ? resolve(parsed.SCHEDULE_ONE_ASSETRIPPER_PATH)
       : undefined,

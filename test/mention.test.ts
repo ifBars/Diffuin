@@ -34,6 +34,15 @@ describe("parseMention", () => {
     });
   });
 
+  it("supports an explicit investigation workflow", () => {
+    assert.deepEqual(parseMention("@Diffuin investigate -- research the persistence seam", "Diffuin"), {
+      task: "research the persistence seam",
+      mode: "investigate",
+      requestedModel: undefined,
+      requestedReasoningEffort: undefined,
+    });
+  });
+
   it("returns a user-facing error for invalid options", () => {
     assert.match(parseMention("@Diffuin review --effort turbo", "Diffuin")?.error ?? "", /--effort/);
     assert.match(parseMention("@Diffuin review --model --effort high", "Diffuin")?.error ?? "", /--model/);

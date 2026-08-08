@@ -13,8 +13,10 @@ use, modify, or adapt it for their own workflow.
 Diffuin combines the target repository's instructions with a bundled,
 public-safe Schedule One modding skill. At job time it refreshes shallow,
 read-only checkouts of the regular and beta stripped-source branches from
-[S1CodeArchiver](https://github.com/k073l/s1-codearchiver). A local self-hosted
-instance may also mount an AssetRipper export read-only.
+[S1CodeArchiver](https://github.com/k073l/s1-codearchiver), plus a
+deployment-owned allowlist of related public mod repositories such as
+`ifBars/MoreDrugs`. A local self-hosted instance may also mount an AssetRipper
+export read-only.
 
 ## What it does
 
@@ -32,8 +34,9 @@ instance may also mount an AssetRipper export read-only.
 7. For pull requests, fetches the base branch so Codex can review the complete
    base-to-head diff.
 8. Scans the response and patch for common secret formats.
-9. Routes reasoning effort from task shape and PR size unless the mention
-   supplies an authorized override.
+9. Routes the request through a dedicated issue-review, issue-implementation,
+   or pull-request-review skill, then selects reasoning effort from task shape
+   and PR size unless the mention supplies an authorized override.
 10. Edits a single status comment into a compact review or plan. PR findings
     are posted on the relevant diff lines when GitHub accepts the location.
 11. Opens a pull request only when an explicitly requested implementation
@@ -45,10 +48,10 @@ end-to-end validation. Its output separates source/static evidence from the
 manual runtime checks a maintainer still needs to perform.
 
 The default model is `gpt-5.6-luna`. Automatic reasoning routing uses `medium`
-for small low-risk reviews, `high` for ordinary reviews, `xhigh` for
-non-trivial reviews and plans, and `max` only for unusually large or risky
-work. Mentions can override both model and reasoning within deployment-owned
-allowlists.
+for small low-risk reviews, `high` for ordinary reviews and focused
+investigations, `xhigh` for non-trivial reviews, investigations, and plans, and
+`max` only for unusually large or risky work. Mentions can override both model
+and reasoning within deployment-owned allowlists.
 
 ## GitHub App setup
 
@@ -85,6 +88,7 @@ Copy `.env.example` to `.env`. Required values are:
 | `CODEX_REASONING_EFFORT` | Fixed fallback used when automatic routing is disabled |
 | `SCHEDULE_ONE_SKILL_PATH` | Bundled Schedule One skill directory; defaults to `./skills/schedule-one-modding` |
 | `SCHEDULE_ONE_CODE_ARCHIVER_URL` | Runtime source for regular/beta stripped-code references |
+| `SCHEDULE_ONE_RELATED_REPOSITORIES` | Comma-separated, deployment-owned public GitHub repository URLs made available read-only; defaults to `ifBars/MoreDrugs` |
 | `SCHEDULE_ONE_ASSETRIPPER_PATH` | Optional read-only AssetRipper export mount for local/self-hosted use |
 
 `DIFFUIN_HANDLE`, `DATA_DIR`, the Codex routing settings, the Schedule One
@@ -136,6 +140,14 @@ Complete the displayed device flow in your browser. The `/data` volume must
 persist across deployments so Codex can refresh its login, retain the reference
 cache, and preserve the job queue.
 
+The persistent volume size applies to `/data`, not automatically to the whole
+container filesystem. Northflank also assigns separate ephemeral storage to
+each runtime instance; it is wiped when the container restarts and has its own
+quota. Diffuin keeps its credentials, SQLite queue, reference cache, and active
+workspaces under `DATA_DIR`, so a hosted `DATA_DIR=/data` intentionally counts
+all of those against the persistent-volume limit. Workspaces are removed after
+each job.
+
 Do not upload an AssetRipper export to a hosted deployment. The default hosted
 configuration uses the runtime-cloned CodeArchiver source plus the bundled
 skill, and reports serialized evidence as unavailable.
@@ -154,12 +166,14 @@ Explicit commands support safe per-request overrides:
 
 ```text
 @Diffuin review --model gpt-5.6-terra --effort high
+@Diffuin investigate --model gpt-5.6-luna -- research the likely lifecycle seam
 @Diffuin plan --model gpt-5.6-luna --effort xhigh -- focus on persistence and multiplayer authority
 ```
 
-Supported commands are `review`, `plan`, `implement`, and `answer`. Use `--`
-before free-form instructions when options are present. Supported reasoning
-levels are `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`. Invalid or
+Supported commands are `review`, `investigate`, `plan`, `implement`, and
+`answer`. Use `--` before free-form instructions when options are present.
+Supported reasoning levels are `minimal`, `low`, `medium`, `high`, `xhigh`,
+and `max`. Invalid or
 disallowed overrides are rejected before a job is queued. Existing free-form
 mentions continue to work and are routed automatically.
 
@@ -167,6 +181,7 @@ Implementation remains explicit:
 
 ```text
 @Diffuin fix the null dereference and add a regression test
+@Diffuin Open a PR against stable to fix the persistence issue
 ```
 
 Diffuin reacts with eyes when the request is queued. It comments with the review
@@ -175,6 +190,16 @@ implementation request produced a patch. Reviews and plans use bounded,
 structured sections instead of slicing long Markdown. Every delivered artifact
 ends with an AI-generated accuracy notice and includes collapsed model,
 reasoning, elapsed-time, and Codex-thread metadata.
+
+Diffuin includes recent issue or PR conversation in each job. Follow-up
+implementation requests therefore reuse earlier research instead of starting a
+new, potentially contradictory diagnosis. Requests to open, create, raise, or
+submit a PR are treated as implementation even without the literal word
+`implement`.
+
+For read-only issue workflows, Diffuin may polish a materially basic issue title
+and description while preserving reporter facts and uncertainty. Already
+actionable reports are left unchanged.
 
 ## Development
 

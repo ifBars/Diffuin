@@ -39,6 +39,7 @@ const references: ScheduleOneReferences = {
   skillPath: "/app/skills/schedule-one-modding",
   regularSourcePath: "/data/references/alternate/ScheduleOne-stripped",
   betaSourcePath: "/data/references/alternate-beta/ScheduleOne-stripped",
+  relatedRepositories: [{ repository: "ifBars/MoreDrugs", path: "/data/references/related/ifBars-MoreDrugs" }],
   warnings: [],
 };
 
@@ -51,14 +52,23 @@ describe("buildPrompt", () => {
     assert.match(prompt, /Never claim an in-game, Play Mode, Mono runtime, IL2CPP runtime/);
     assert.match(prompt, /Read \/app\/skills\/schedule-one-modding\/SKILL\.md first/);
     assert.match(prompt, /Regular stripped source: \/data\/references\/alternate/);
-    assert.match(prompt, /Do not edit files for review, explanation, or planning requests/);
+    assert.match(prompt, /Related mod source \(ifBars\/MoreDrugs\)/);
+    assert.match(prompt, /Do not edit files for review, explanation, investigation, or planning requests/);
+    assert.match(prompt, /review-pull-request[\\/]SKILL\.md/);
   });
 
   it("includes issue context and unavailable-reference warnings", () => {
     const issueJob = { ...job, kind: "issue" as const, task: "polish the acceptance criteria" };
     const prompt = buildPrompt(
       issueJob,
-      { title: "Custom station support", body: "We need a safe builder API." },
+      {
+        title: "Custom station support",
+        body: "We need a safe builder API.",
+        comments: [
+          { id: 98, author: "diffuin[bot]", body: "Prior research identified the native registry seam." },
+          { id: 99, author: "maintainer", body: "@Diffuin polish the acceptance criteria" },
+        ],
+      },
       null,
       { skillPath: references.skillPath, warnings: ["Beta game source unavailable: timeout"] },
     );
@@ -67,6 +77,9 @@ describe("buildPrompt", () => {
     assert.match(prompt, /We need a safe builder API/);
     assert.match(prompt, /Beta stripped source: unavailable/);
     assert.match(prompt, /Reference warning: Beta game source unavailable: timeout/);
+    assert.match(prompt, /review-issue[\\/]SKILL\.md/);
+    assert.match(prompt, /Prior research identified the native registry seam/);
+    assert.doesNotMatch(prompt, /@Diffuin polish the acceptance criteria/);
     assert.doesNotMatch(prompt, /git diff --find-renames/);
   });
 });

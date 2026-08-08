@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Pull Request"
+  short_description: "Review Schedule One modding pull requests"
+  default_prompt: "Use $review-pull-request to review this pull request against source and repository contracts."

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseArtifact, renderArtifact } from "../src/artifact.js";
+import { artifactOutputSchema, parseArtifact, renderArtifact } from "../src/artifact.js";
 
 const base = {
   kind: "review",
@@ -82,5 +82,22 @@ describe("Diffuin artifacts", () => {
 
     assert.match(rendered.body, /<summary>Evidence and validation<\/summary>/);
     assert.match(rendered.body, /### Implementation/);
+  });
+
+  it("does not impose a hard JSON summary boundary that can cut a sentence", () => {
+    assert.equal("maxLength" in artifactOutputSchema.properties.summary, false);
+    const artifact = parseArtifact(JSON.stringify({ ...base, summary: `${"Evidence ".repeat(100)}supports the conclusion.` }));
+    assert.match(artifact.summary, /supports the conclusion\.$/);
+  });
+
+  it("labels source-backed responses as investigations", () => {
+    const artifact = parseArtifact(JSON.stringify({ ...base, kind: "response", verdict: "not_applicable", findings: [] }));
+    const rendered = renderArtifact(
+      artifact,
+      { mode: "investigate", model: "gpt-5.6-luna", reasoningEffort: "xhigh", reason: "non-trivial source-backed investigation" },
+      { threadId: "thread", elapsedSeconds: 1 },
+    );
+    assert.match(rendered.body, /## Issue investigation/);
+    assert.match(rendered.body, /\*\*Confidence:\*\*/);
   });
 });

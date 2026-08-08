@@ -73,6 +73,7 @@ describe("Worker review delivery", () => {
         files: ["S1API/Example.cs"],
       }),
       getInstallationToken: async () => "token",
+      updateIssue: async () => undefined,
       createPullRequest: async () => ({ number: 1, url: "https://example.test/1" }),
     };
     const codex: CodexPort = {
@@ -107,6 +108,7 @@ describe("Worker review delivery", () => {
       jobPollIntervalMs: 1000,
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/s1-codearchiver.git",
+      scheduleOneRelatedRepositories: [],
     };
 
     await new Worker(config, store, github, codex, workspaces, references).process(job);
@@ -116,5 +118,160 @@ describe("Worker review delivery", () => {
     assert.match(updates[0] ?? "", /## Diffuin review/);
     assert.match(updates[0] ?? "", /AI notice/);
     assert.doesNotMatch(updates[0] ?? "", /truncated/);
+  });
+
+  it("turns an open-PR issue follow-up into a patch against the requested branch", async () => {
+    const implementationJob: Job = {
+      ...job,
+      kind: "issue",
+      mode: "auto",
+      task: "Open a PR against stable to fix the persistence issue.",
+    };
+    let preparedSource = "";
+    let pullRequestBase = "";
+    let finished = "";
+    const updates: string[] = [];
+    const github: GitHubPort = {
+      getActorPermission: async () => "write",
+      addReaction: async () => undefined,
+      comment: async () => 88,
+      updateComment: async (_request, _commentId, body) => { updates.push(body); },
+      reviewPullRequest: async () => undefined,
+      getDefaultBranch: async () => "beta",
+      getIssue: async () => ({
+        title: "Relationship persistence bug",
+        body: "The saved relationship value resets after reload.",
+        comments: [
+          { id: 2, author: "diffuin[bot]", body: "Prior research identified a sentinel-value overwrite." },
+          { id: 3, author: "ifBars", body: implementationJob.task },
+        ],
+      }),
+      getPullRequest: async () => { throw new Error("not a pull request"); },
+      getInstallationToken: async () => "token",
+      updateIssue: async () => undefined,
+      createPullRequest: async (_request, input) => {
+        pullRequestBase = input.base;
+        return { number: 44, url: "https://example.test/pull/44" };
+      },
+    };
+    const codex: CodexPort = {
+      run: async (_directory, prompt) => {
+        assert.match(prompt, /Prior research identified a sentinel-value overwrite/);
+        assert.match(prompt, /implement-issue[\\/]SKILL\.md/);
+        return {
+          finalResponse: JSON.stringify({
+            ...JSON.parse(response),
+            kind: "response",
+            verdict: "not_applicable",
+            findings: [],
+            summary: "Implemented the narrow persistence repair and focused regression coverage.",
+          }),
+          threadId: "thread",
+        };
+      },
+    };
+    const store = {
+      finish: (_id: string, status: string) => { finished = status; },
+    } as unknown as JobStore;
+    const workspaces = {
+      prepare: async (input: { sourceRef: string }) => {
+        preparedSource = input.sourceRef;
+        return { path: "C:/temp/work", branch: "diffuin/test", remoteUrl: "https://example.test/repo.git" };
+      },
+      hasChanges: async () => true,
+      readPatch: async () => "diff --git a/file b/file",
+      commitAndPush: async () => "commit-sha",
+      cleanup: async () => undefined,
+    } as unknown as GitWorkspace;
+    const references = {
+      prepare: async () => ({ skillPath: "C:/skills/schedule-one-modding", warnings: [] }),
+    } as unknown as ScheduleOneReferenceWorkspace;
+    const config: Config = {
+      port: 8787,
+      githubAppId: 1,
+      githubPrivateKey: "test-key",
+      githubWebhookSecret: "test-webhook-secret",
+      handle: "Diffuin",
+      allowedRepositories: new Set(["ifbars/s1api"]),
+      dataDir: "C:/temp/diffuin-data",
+      codexModel: "gpt-5.6-luna",
+      allowedCodexModels: new Set(["gpt-5.6-luna"]),
+      codexReasoningEffort: "max",
+      autoReasoningRouting: true,
+      jobPollIntervalMs: 1000,
+      scheduleOneSkillPath: "C:/skills/schedule-one-modding",
+      scheduleOneCodeArchiverUrl: "https://example.test/s1-codearchiver.git",
+      scheduleOneRelatedRepositories: [],
+    };
+
+    await new Worker(config, store, github, codex, workspaces, references).process(implementationJob);
+
+    assert.equal(preparedSource, "stable");
+    assert.equal(pullRequestBase, "stable");
+    assert.equal(finished, "succeeded");
+    assert.match(updates.at(-1) ?? "", /opened #44/);
+  });
+
+  it("polishes a basic issue before posting its investigation", async () => {
+    const issueJob: Job = { ...job, kind: "issue", mode: "investigate", task: "Investigate this issue." };
+    let updatedIssue: { title: string; body: string } | null = null;
+    let finalComment = "";
+    const github: GitHubPort = {
+      getActorPermission: async () => "write",
+      addReaction: async () => undefined,
+      comment: async () => 90,
+      updateComment: async (_request, _commentId, body) => { finalComment = body; },
+      reviewPullRequest: async () => undefined,
+      getDefaultBranch: async () => "stable",
+      getIssue: async () => ({ title: "npc broken", body: "npc walks inside" }),
+      getPullRequest: async () => { throw new Error("not a pull request"); },
+      updateIssue: async (_request, input) => { updatedIssue = input; },
+      getInstallationToken: async () => "token",
+      createPullRequest: async () => ({ number: 1, url: "https://example.test/1" }),
+    };
+    const codex: CodexPort = {
+      run: async () => ({
+        finalResponse: JSON.stringify({
+          ...JSON.parse(response),
+          kind: "response",
+          verdict: "not_applicable",
+          findings: [],
+          summary: "The custom NPC destination policy is the leading static seam.",
+          issuePolish: {
+            needed: true,
+            title: "[BUG] Custom NPC enters owned properties",
+            body: "### Summary\n\nA custom NPC enters an owned property while approaching the player.",
+            reason: "The original report lacked actionable structure.",
+          },
+        }),
+        threadId: "thread",
+      }),
+    };
+    const store = { finish: () => undefined } as unknown as JobStore;
+    const workspaces = {
+      prepare: async () => ({ path: "C:/temp/work", branch: "diffuin/test", remoteUrl: "https://example.test/repo.git" }),
+      hasChanges: async () => false,
+      cleanup: async () => undefined,
+    } as unknown as GitWorkspace;
+    const references = {
+      prepare: async () => ({ skillPath: "C:/skills/schedule-one-modding", warnings: [] }),
+    } as unknown as ScheduleOneReferenceWorkspace;
+    const config = {
+      port: 8787, githubAppId: 1, githubPrivateKey: "key", githubWebhookSecret: "test-webhook-secret",
+      handle: "Diffuin", allowedRepositories: new Set(["ifbars/s1api"]), dataDir: "C:/temp/data",
+      codexModel: "gpt-5.6-luna", allowedCodexModels: new Set(["gpt-5.6-luna"]),
+      codexReasoningEffort: "max" as const, autoReasoningRouting: true, jobPollIntervalMs: 1000,
+      scheduleOneSkillPath: "C:/skills/schedule-one-modding",
+      scheduleOneCodeArchiverUrl: "https://example.test/archive.git", scheduleOneRelatedRepositories: [],
+    } satisfies Config;
+
+    await new Worker(config, store, github, codex, workspaces, references).process(issueJob);
+
+    assert.deepEqual(updatedIssue, {
+      title: "[BUG] Custom NPC enters owned properties",
+      body: "### Summary\n\nA custom NPC enters an owned property while approaching the player.",
+    });
+    assert.match(finalComment, /polished the issue description/);
+    assert.match(finalComment, /## Issue investigation/);
   });
 });

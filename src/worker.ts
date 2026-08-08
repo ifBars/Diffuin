@@ -51,7 +51,8 @@ export class Worker {
       );
 
       const defaultBranch = await this.github.getDefaultBranch(job);
-      const sourceRef = pullRequest?.headSha ?? defaultBranch;
+      const targetBranch = targetBranchFor(job, pullRequest, defaultBranch);
+      const sourceRef = pullRequest?.headSha ?? targetBranch;
       const token = await this.github.getInstallationToken(job);
       const repository = await this.workspaces.prepare({
         jobId: job.id,
@@ -82,9 +83,24 @@ export class Worker {
       });
       assertNoSecrets(rendered.body);
 
+      let issueUpdateNotice = "";
+      if (job.kind === "issue" && route.mode !== "implement" && artifact.issuePolish.needed) {
+        const title = artifact.issuePolish.title.trim();
+        const body = artifact.issuePolish.body.trim();
+        if (!title || !body) {
+          throw new Error("Codex requested an issue polish without a complete replacement title and body");
+        }
+        assertNoSecrets(`${title}\n${body}`);
+        await this.github.updateIssue(job, { title, body });
+        issueUpdateNotice = `> Diffuin polished the issue description: ${artifact.issuePolish.reason}\n\n`;
+      }
+
       const hasChanges = await this.workspaces.hasChanges(repository.path);
       if (!hasChanges) {
-        let body = rendered.body;
+        if (route.mode === "implement") {
+          throw new Error("Implementation was requested, but Codex produced no repository changes; no pull request was opened");
+        }
+        let body = `${issueUpdateNotice}${rendered.body}`;
         if (job.kind === "pull_request" && route.mode === "review" && rendered.inlineComments.length) {
           try {
             await this.github.reviewPullRequest(job, "", rendered.inlineComments);
@@ -108,7 +124,6 @@ export class Worker {
         token,
         `chore(diffuin): address #${job.issueNumber}`,
       );
-      const targetBranch = targetBranchFor(job, pullRequest, defaultBranch);
       const created = await this.github.createPullRequest(job, {
         head: repository.branch,
         base: targetBranch,
@@ -145,11 +160,20 @@ export class Worker {
 
 function targetBranchFor(job: Job, pullRequest: PullRequestContext | null, defaultBranch: string): string {
   if (!pullRequest) {
-    return defaultBranch;
+    return requestedTargetBranch(job.task) ?? defaultBranch;
   }
   return pullRequest.headRepository.toLowerCase() === job.repository.toLowerCase()
     ? pullRequest.headBranch
     : pullRequest.baseBranch;
+}
+
+function requestedTargetBranch(task: string): string | null {
+  const match = task.match(/\b(?:against|into|target(?:ing)?)\s+(?:the\s+)?(?:branch\s+)?[`'"]?([A-Za-z0-9][A-Za-z0-9._/-]{0,100})/i);
+  const branch = match?.[1];
+  if (!branch || branch.includes("..") || branch.endsWith("/") || branch.endsWith(".lock")) {
+    return null;
+  }
+  return branch;
 }
 
 function buildPullRequestBody(job: Job, response: string, commitSha: string): string {
@@ -178,6 +202,7 @@ function delay(milliseconds: number): Promise<void> {
 function presentParticiple(mode: string): string {
   switch (mode) {
     case "review": return "reviewing";
+    case "investigate": return "investigating";
     case "plan": return "planning";
     case "implement": return "implementing";
     default: return "answering";
