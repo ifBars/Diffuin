@@ -33,6 +33,7 @@ export const artifactSchema = z.object({
   validationPerformed: z.array(z.string().max(800)).max(4),
   validationRemaining: z.array(z.string().max(800)).max(4),
   openQuestions: z.array(z.string().max(800)).max(3),
+  pullRequestTitle: z.string().max(120).default(""),
   issuePolish: z.object({
     needed: z.boolean(),
     title: z.string().max(256),
@@ -48,7 +49,7 @@ export const artifactOutputSchema = {
   additionalProperties: false,
   required: [
     "kind", "verdict", "confidence", "summary", "findings", "evidence", "designChoices",
-    "phases", "validationPerformed", "validationRemaining", "openQuestions", "issuePolish",
+    "phases", "validationPerformed", "validationRemaining", "openQuestions", "pullRequestTitle", "issuePolish",
   ],
   properties: {
     kind: { type: "string", enum: ["review", "plan", "response"] },
@@ -103,6 +104,7 @@ export const artifactOutputSchema = {
     validationPerformed: { type: "array", maxItems: 4, items: { type: "string" } },
     validationRemaining: { type: "array", maxItems: 4, items: { type: "string" } },
     openQuestions: { type: "array", maxItems: 3, items: { type: "string" } },
+    pullRequestTitle: { type: "string", maxLength: 120 },
     issuePolish: {
       type: "object",
       additionalProperties: false,

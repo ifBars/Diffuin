@@ -148,6 +148,7 @@ describe("Worker review delivery", () => {
     };
     let preparedSource = "";
     let pullRequestBase = "";
+    let pullRequestTitle = "";
     let finished = "";
     const updates: string[] = [];
     const github: GitHubPort = {
@@ -170,6 +171,7 @@ describe("Worker review delivery", () => {
       updateIssue: async () => undefined,
       createPullRequest: async (_request, input) => {
         pullRequestBase = input.base;
+        pullRequestTitle = input.title;
         return { number: 44, url: "https://example.test/pull/44" };
       },
     };
@@ -184,6 +186,7 @@ describe("Worker review delivery", () => {
             verdict: "not_applicable",
             findings: [],
             summary: "Implemented the narrow persistence repair and focused regression coverage.",
+            pullRequestTitle: "Fix custom NPC relationship persistence",
           }),
           threadId: "thread",
         };
@@ -226,8 +229,9 @@ describe("Worker review delivery", () => {
 
     assert.equal(preparedSource, "stable");
     assert.equal(pullRequestBase, "stable");
+    assert.equal(pullRequestTitle, "Fix custom NPC relationship persistence");
     assert.equal(finished, "succeeded");
-    assert.match(updates.at(-1) ?? "", /opened #44/);
+    assert.equal(updates.at(-1), "Diffuin opened https://example.test/pull/44");
   });
 
   it("polishes a basic issue before posting its investigation", async () => {

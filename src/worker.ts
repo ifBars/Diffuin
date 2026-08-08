@@ -143,11 +143,11 @@ export class Worker {
       const created = await this.github.createPullRequest(job, {
         head: repository.branch,
         base: targetBranch,
-        title: `Diffuin: ${truncateTitle(job.task)}`,
+        title: pullRequestTitle(artifact.pullRequestTitle, job.task),
         body: buildPullRequestBody(job, rendered.body, commitSha),
       });
       await this.github.addReaction(job, "rocket");
-      await this.replaceStatus(job, statusCommentId, `Diffuin opened #${created.number}: ${created.url}`);
+      await this.replaceStatus(job, statusCommentId, `Diffuin opened ${created.url}`);
       this.store.finish(job.id, "succeeded");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -206,6 +206,12 @@ Commit: \`${commitSha}\``;
 function truncateTitle(value: string): string {
   const singleLine = value.replace(/\s+/g, " ").trim();
   return singleLine.length <= 72 ? singleLine : `${singleLine.slice(0, 71)}…`;
+}
+
+function pullRequestTitle(generatedTitle: string, fallbackTask: string): string {
+  const title = generatedTitle.replace(/\s+/g, " ").replace(/[`#]/g, "").trim();
+  if (title.length >= 8 && title.length <= 120) return title;
+  return `Diffuin: ${truncateTitle(fallbackTask)}`;
 }
 
 function escapeInline(value: string): string {
