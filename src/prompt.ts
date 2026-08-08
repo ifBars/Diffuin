@@ -87,6 +87,7 @@ Output contract:
 - Empty arrays are valid when a section is not relevant.
 - Always return \`issuePolish\`. Set \`needed\` to true only for a materially basic issue in a read-only issue workflow, preserving all reporter facts in the replacement title/body. Otherwise set \`needed\` to false and use empty strings for its other fields.
 - Always return \`pullRequestTitle\`. In implementation mode, write a concise, specific, imperative PR title that describes the implemented change; do not copy or truncate the user request. In all other modes, use an empty string.
+- Always return \`closesIssue\`. Set it to true only in implementation mode when the resulting pull request fully resolves the source issue without known remaining work. Use false for partial fixes, investigative changes, pull-request follow-ups, or uncertain scope.
 - State repository checks actually run in validationPerformed. Put all unperformed game, runtime, multiplayer, save/load, and end-to-end checks in validationRemaining.`;
 }
 

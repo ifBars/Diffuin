@@ -144,7 +144,7 @@ export class Worker {
         head: repository.branch,
         base: targetBranch,
         title: pullRequestTitle(artifact.pullRequestTitle, job.task),
-        body: buildPullRequestBody(job, rendered.body, commitSha),
+        body: buildPullRequestBody(job, rendered.body, commitSha, artifact.closesIssue),
       });
       await this.github.addReaction(job, "rocket");
       await this.replaceStatus(job, statusCommentId, `Diffuin opened ${created.url}`);
@@ -193,10 +193,11 @@ function requestedTargetBranch(task: string): string | null {
   return branch;
 }
 
-function buildPullRequestBody(job: Job, response: string, commitSha: string): string {
+function buildPullRequestBody(job: Job, response: string, commitSha: string, closesIssue: boolean): string {
+  const closingReference = job.kind === "issue" && closesIssue ? `\n\nCloses #${job.issueNumber}` : "";
   return `Requested by @${job.actor} in #${job.issueNumber}.
 
-${response}
+${response}${closingReference}
 
 ---
 Diffuin job: \`${job.id}\`  
