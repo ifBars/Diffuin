@@ -55,6 +55,8 @@ describe("buildPrompt", () => {
     );
 
     assert.match(prompt, /Schedule One modding review and issue-planning agent/);
+    assert.match(prompt, /Speak as Diffuin in the first person using "I" and "my"/);
+    assert.match(prompt, /Never refer to yourself as "Diffuin" in user-facing prose/);
     assert.match(prompt, /git diff --find-renames refs\/diffuin\/base\.\.\.HEAD/);
     assert.match(prompt, /Never claim an in-game, Play Mode, Mono runtime, IL2CPP runtime/);
     assert.match(prompt, /Read \/app\/skills\/schedule-one-modding\/SKILL\.md first/);

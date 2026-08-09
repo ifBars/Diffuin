@@ -51,7 +51,7 @@ export function createDiffuinServer(config: Config, store: JobStore, github: Git
         await github.addReaction(work, "confused").catch(() => undefined);
         await github.comment(
           work,
-          `Diffuin could not queue this request.\n\n\`${commandError.replace(/`/g, "'")}\`\n\n` +
+          `I couldn't queue this request.\n\n\`${commandError.replace(/`/g, "'")}\`\n\n` +
           "Use `@Diffuin review|investigate|plan|implement|answer --model <model> --effort <level> -- <instructions>`."
         ).catch(() => undefined);
         return json(response, 202, { status: "invalid_command" });

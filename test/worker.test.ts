@@ -58,6 +58,7 @@ const githubReadBroker: GitHubReadBrokerPort = {
 
 describe("Worker review delivery", () => {
   it("edits the progress comment and posts native inline findings", async () => {
+    let progressComment = "";
     const updates: string[] = [];
     const inline: Array<{ path: string; line: number; body: string }> = [];
     let finished = "";
@@ -73,7 +74,7 @@ describe("Worker review delivery", () => {
     const github: GitHubPort = {
       getActorPermission: async () => "write",
       addReaction: async () => undefined,
-      comment: async () => 77,
+      comment: async (_request, body) => { progressComment = body; return 77; },
       updateComment: async (_request, _commentId, body) => { updates.push(body); },
       reviewPullRequest: async (_request, _body, comments) => { inline.push(...comments); },
       getDefaultBranch: async () => "beta",
@@ -132,6 +133,7 @@ describe("Worker review delivery", () => {
     await new Worker(config, store, github, codex, workspaces, references, trackedReadBroker).process(job);
 
     assert.equal(finished, "succeeded");
+    assert.match(progressComment, /^I'm reviewing this pull request\./);
     assert.equal(inline.length, 1);
     assert.match(updates[0] ?? "", /## Diffuin review/);
     assert.match(updates[0] ?? "", /AI notice/);
@@ -235,7 +237,7 @@ describe("Worker review delivery", () => {
     assert.equal(pullRequestTitle, "Fix custom NPC relationship persistence");
     assert.match(pullRequestBody, /Closes #12/);
     assert.equal(finished, "succeeded");
-    assert.equal(updates.at(-1), "Diffuin opened https://example.test/pull/44");
+    assert.equal(updates.at(-1), "I opened https://example.test/pull/44");
   });
 
   it("polishes a basic issue before posting its investigation", async () => {
@@ -297,7 +299,7 @@ describe("Worker review delivery", () => {
       title: "[BUG] Custom NPC enters owned properties",
       body: "### Summary\n\nA custom NPC enters an owned property while approaching the player.",
     });
-    assert.match(finalComment, /polished the issue description/);
+    assert.match(finalComment, /^> I polished the issue description/);
     assert.match(finalComment, /## Issue investigation/);
   });
 });

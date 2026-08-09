@@ -49,7 +49,7 @@ export class Worker {
       const route = routeExecution(job, issue, pullRequest, this.config);
       statusCommentId = await this.github.comment(
         job,
-        `Diffuin is ${presentParticiple(route.mode)} this ${job.kind === "pull_request" ? "pull request" : "issue"}.\n\n` +
+        `I'm ${presentParticiple(route.mode)} this ${job.kind === "pull_request" ? "pull request" : "issue"}.\n\n` +
         `<sub>Model: \`${route.model}\` · Reasoning: \`${route.reasoningEffort}\` (${route.reason})</sub>`,
       );
 
@@ -108,7 +108,7 @@ export class Worker {
         }
         assertNoSecrets(`${title}\n${body}`);
         await this.github.updateIssue(job, { title, body });
-        issueUpdateNotice = `> Diffuin polished the issue description: ${artifact.issuePolish.reason}\n\n`;
+        issueUpdateNotice = `> I polished the issue description: ${artifact.issuePolish.reason}\n\n`;
       }
 
       const hasChanges = await this.workspaces.hasChanges(repository.path);
@@ -147,7 +147,7 @@ export class Worker {
         body: buildPullRequestBody(job, rendered.body, commitSha, artifact.closesIssue),
       });
       await this.github.addReaction(job, "rocket");
-      await this.replaceStatus(job, statusCommentId, `Diffuin opened ${created.url}`);
+      await this.replaceStatus(job, statusCommentId, `I opened ${created.url}`);
       this.store.finish(job.id, "succeeded");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -156,7 +156,7 @@ export class Worker {
       await this.replaceStatus(
         job,
         statusCommentId,
-        `Diffuin could not complete this request.\n\n\`${escapeInline(message)}\``,
+        `I couldn't complete this request.\n\n\`${escapeInline(message)}\``,
       ).catch(() => undefined);
     } finally {
       githubReadSession?.close();
