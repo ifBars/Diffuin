@@ -25,6 +25,8 @@ AssetRipper is not the code tool. Scripts are assembly-backed; use `ilspycmd` fo
 
 ## Focused project inspection
 
+In hosted Diffuin runs, use the `diffuin_assetripper` tools instead of shell access. Start with `assetripper_find_paths` or `assetripper_search`, then use `assetripper_read_file` on a narrow line range. The private corpus may omit asset bodies such as textures and meshes while retaining their `.meta` files for GUID-to-name resolution.
+
 1. Start from the visible behavior, relevant class, log frame, object name, UI text, resource name, or scene.
 2. Search the smallest relevant export subtree first. On Windows, use windows-fast-search or `rg` for exact identifiers and likely Unity files such as `.prefab`, `.unity`, `.asset`, `.mat`, `.controller`, and `.anim`.
 3. Inspect the prefab or scene hierarchy and record component types, active states, transforms, serialized values, and referenced objects.

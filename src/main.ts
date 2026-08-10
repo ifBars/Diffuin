@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { CodexClient } from "./codex.js";
+import { AssetRipperReadBroker } from "./assetripper-read-broker.js";
 import { loadConfig } from "./config.js";
 import { GitWorkspace } from "./git.js";
 import { GitHubClient } from "./github.js";
@@ -14,6 +15,8 @@ const store = new JobStore(join(config.dataDir, "diffuin.sqlite"));
 const github = new GitHubClient(config.githubAppId, config.githubPrivateKey, config.githubWebhookSecret);
 const githubReadBroker = new GitHubReadBroker(github);
 await githubReadBroker.start();
+const assetRipperReadBroker = new AssetRipperReadBroker();
+await assetRipperReadBroker.start();
 const codex = new CodexClient(config.dataDir);
 const references = new ScheduleOneReferenceWorkspace(
   config.dataDir,
@@ -29,6 +32,7 @@ const worker = new Worker(
   new GitWorkspace(config.dataDir),
   references,
   githubReadBroker,
+  assetRipperReadBroker,
 );
 const server = createDiffuinServer(config, store, github);
 
@@ -46,7 +50,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
     worker.stop();
     server.close(() => {
-      void githubReadBroker.stop().finally(() => {
+      void Promise.all([githubReadBroker.stop(), assetRipperReadBroker.stop()]).finally(() => {
         store.close();
         process.exit(0);
       });

@@ -39,6 +39,7 @@ const references: ScheduleOneReferences = {
   skillPath: "/app/skills/schedule-one-modding",
   regularSourcePath: "/data/references/alternate/ScheduleOne-stripped",
   betaSourcePath: "/data/references/alternate-beta/ScheduleOne-stripped",
+  assetRipperPath: "/data/references/assetripper",
   warnings: [],
 };
 
@@ -66,6 +67,9 @@ describe("buildPrompt", () => {
     assert.match(prompt, /Read-only GitHub evidence/);
     assert.match(prompt, /ifBars\/MoreDrugs/);
     assert.match(prompt, /diffuin_github/);
+    assert.match(prompt, /diffuin_assetripper/);
+    assert.match(prompt, /Private AssetRipper corpus: available through read-only tools/);
+    assert.doesNotMatch(prompt, /\/data\/references\/assetripper/);
     assert.match(prompt, /Do not edit files for review, explanation, investigation, or planning requests/);
     assert.match(prompt, /review-pull-request[\\/]SKILL\.md/);
   });

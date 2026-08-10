@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Worker } from "../src/worker.js";
 import type { Config } from "../src/config.js";
-import type { CodexPort, GitHubPort, GitHubReadBrokerPort, Job } from "../src/types.js";
+import type { AssetRipperReadBrokerPort, CodexPort, GitHubPort, GitHubReadBrokerPort, Job } from "../src/types.js";
 import type { GitWorkspace } from "../src/git.js";
 import type { JobStore } from "../src/store.js";
 import type { ScheduleOneReferenceWorkspace } from "../src/references.js";
@@ -56,6 +56,10 @@ const githubReadBroker: GitHubReadBrokerPort = {
   }),
 };
 
+const assetRipperReadBroker: AssetRipperReadBrokerPort = {
+  openSession: async () => undefined,
+};
+
 describe("Worker review delivery", () => {
   it("edits the progress comment and posts native inline findings", async () => {
     let progressComment = "";
@@ -63,6 +67,7 @@ describe("Worker review delivery", () => {
     const inline: Array<{ path: string; line: number; body: string }> = [];
     let finished = "";
     let readSessionClosed = false;
+    let assetReadSessionClosed = false;
     const trackedReadBroker: GitHubReadBrokerPort = {
       openSession: () => ({
         url: "http://127.0.0.1:12345/mcp",
@@ -70,6 +75,16 @@ describe("Worker review delivery", () => {
         repositories: ["ifBars/S1API"],
         close: () => { readSessionClosed = true; },
       }),
+    };
+    const trackedAssetReadBroker: AssetRipperReadBrokerPort = {
+      openSession: async (root) => {
+        assert.equal(root, "C:/references/assetripper");
+        return {
+          url: "http://127.0.0.1:23456/mcp",
+          token: "asset-session-token",
+          close: () => { assetReadSessionClosed = true; },
+        };
+      },
     };
     const github: GitHubPort = {
       getActorPermission: async () => "write",
@@ -99,6 +114,7 @@ describe("Worker review delivery", () => {
       run: async (_directory, _prompt, options) => {
         assert.equal(options.reasoningEffort, "medium");
         assert.equal(options.githubReadSession?.token, "session-token");
+        assert.equal(options.assetRipperReadSession?.token, "asset-session-token");
         return { finalResponse: response, threadId: "thread" };
       },
     };
@@ -111,7 +127,11 @@ describe("Worker review delivery", () => {
       cleanup: async () => undefined,
     } as unknown as GitWorkspace;
     const references = {
-      prepare: async () => ({ skillPath: "C:/skills/schedule-one-modding", warnings: [] }),
+      prepare: async () => ({
+        skillPath: "C:/skills/schedule-one-modding",
+        assetRipperPath: "C:/references/assetripper",
+        warnings: [],
+      }),
     } as unknown as ScheduleOneReferenceWorkspace;
     const config: Config = {
       port: 8787,
@@ -130,7 +150,16 @@ describe("Worker review delivery", () => {
       scheduleOneCodeArchiverUrl: "https://example.test/s1-codearchiver.git",
     };
 
-    await new Worker(config, store, github, codex, workspaces, references, trackedReadBroker).process(job);
+    await new Worker(
+      config,
+      store,
+      github,
+      codex,
+      workspaces,
+      references,
+      trackedReadBroker,
+      trackedAssetReadBroker,
+    ).process(job);
 
     assert.equal(finished, "succeeded");
     assert.match(progressComment, /^I'm reviewing this pull request\./);
@@ -139,6 +168,7 @@ describe("Worker review delivery", () => {
     assert.match(updates[0] ?? "", /AI notice/);
     assert.doesNotMatch(updates[0] ?? "", /truncated/);
     assert.equal(readSessionClosed, true);
+    assert.equal(assetReadSessionClosed, true);
   });
 
   it("turns an open-PR issue follow-up into a patch against the requested branch", async () => {
@@ -230,7 +260,16 @@ describe("Worker review delivery", () => {
       scheduleOneCodeArchiverUrl: "https://example.test/s1-codearchiver.git",
     };
 
-    await new Worker(config, store, github, codex, workspaces, references, githubReadBroker).process(implementationJob);
+    await new Worker(
+      config,
+      store,
+      github,
+      codex,
+      workspaces,
+      references,
+      githubReadBroker,
+      assetRipperReadBroker,
+    ).process(implementationJob);
 
     assert.equal(preparedSource, "stable");
     assert.equal(pullRequestBase, "stable");
@@ -293,7 +332,16 @@ describe("Worker review delivery", () => {
       scheduleOneCodeArchiverUrl: "https://example.test/archive.git",
     } satisfies Config;
 
-    await new Worker(config, store, github, codex, workspaces, references, githubReadBroker).process(issueJob);
+    await new Worker(
+      config,
+      store,
+      github,
+      codex,
+      workspaces,
+      references,
+      githubReadBroker,
+      assetRipperReadBroker,
+    ).process(issueJob);
 
     assert.deepEqual(updatedIssue, {
       title: "[BUG] Custom NPC enters owned properties",

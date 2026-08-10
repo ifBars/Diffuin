@@ -1,6 +1,12 @@
 import { Codex, type CodexOptions, type ThreadEvent } from "@openai/codex-sdk";
 import { join } from "node:path";
-import type { CodexPort, CodexResult, GitHubReadSession, ReasoningEffort } from "./types.js";
+import type {
+  AssetRipperReadSession,
+  CodexPort,
+  CodexResult,
+  GitHubReadSession,
+  ReasoningEffort,
+} from "./types.js";
 import { sanitizedEnvironment } from "./environment.js";
 
 export class CodexClient implements CodexPort {
@@ -14,15 +20,23 @@ export class CodexClient implements CodexPort {
       reasoningEffort: ReasoningEffort;
       outputSchema: object;
       githubReadSession?: GitHubReadSession;
+      assetRipperReadSession?: AssetRipperReadSession;
     },
   ): Promise<CodexResult> {
-    const config = buildCodexConfig(options.reasoningEffort, options.githubReadSession);
+    const config = buildCodexConfig(
+      options.reasoningEffort,
+      options.githubReadSession,
+      options.assetRipperReadSession,
+    );
     const codex = new Codex({
       config,
       env: sanitizedEnvironment({
         CODEX_HOME: join(this.dataDir, "codex-home"),
         ...(options.githubReadSession
           ? { DIFFUIN_GITHUB_READ_TOKEN: options.githubReadSession.token }
+          : {}),
+        ...(options.assetRipperReadSession
+          ? { DIFFUIN_ASSETRIPPER_READ_TOKEN: options.assetRipperReadSession.token }
           : {}),
       }),
     });
@@ -45,19 +59,30 @@ export class CodexClient implements CodexPort {
 
 export function buildCodexConfig(
   reasoningEffort: ReasoningEffort,
-  session?: GitHubReadSession,
+  githubSession?: GitHubReadSession,
+  assetRipperSession?: AssetRipperReadSession,
 ): NonNullable<CodexOptions["config"]> {
   return {
     model_reasoning_effort: reasoningEffort,
     features: { apps: false, plugins: false },
-    ...(session ? {
+    ...((githubSession || assetRipperSession) ? {
       mcp_servers: {
-        diffuin_github: {
-          url: session.url,
-          bearer_token_env_var: "DIFFUIN_GITHUB_READ_TOKEN",
-          enabled: true,
-          required: true,
-        },
+        ...(githubSession ? {
+          diffuin_github: {
+            url: githubSession.url,
+            bearer_token_env_var: "DIFFUIN_GITHUB_READ_TOKEN",
+            enabled: true,
+            required: true,
+          },
+        } : {}),
+        ...(assetRipperSession ? {
+          diffuin_assetripper: {
+            url: assetRipperSession.url,
+            bearer_token_env_var: "DIFFUIN_ASSETRIPPER_READ_TOKEN",
+            enabled: true,
+            required: true,
+          },
+        } : {}),
       },
     } : {}),
   };

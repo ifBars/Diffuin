@@ -84,6 +84,16 @@ export interface GitHubReadSession {
   close(): void;
 }
 
+export interface AssetRipperReadSession {
+  url: string;
+  token: string;
+  close(): void;
+}
+
+export interface AssetRipperReadBrokerPort {
+  openSession(root: string | undefined): Promise<AssetRipperReadSession | undefined>;
+}
+
 export interface GitHubReadBrokerPort {
   openSession(request: WorkRequest, context: IssueContext): GitHubReadSession;
 }
@@ -123,6 +133,7 @@ export interface CodexPort {
       reasoningEffort: ReasoningEffort;
       outputSchema: object;
       githubReadSession?: GitHubReadSession;
+      assetRipperReadSession?: AssetRipperReadSession;
     },
   ): Promise<CodexResult>;
 }

@@ -3,7 +3,16 @@ import type { Config } from "./config.js";
 import { buildPrompt } from "./prompt.js";
 import { routeExecution } from "./routing.js";
 import { assertNoSecrets } from "./secrets.js";
-import type { CodexPort, GitHubPort, GitHubReadBrokerPort, GitHubReadSession, Job, PullRequestContext } from "./types.js";
+import type {
+  AssetRipperReadBrokerPort,
+  AssetRipperReadSession,
+  CodexPort,
+  GitHubPort,
+  GitHubReadBrokerPort,
+  GitHubReadSession,
+  Job,
+  PullRequestContext,
+} from "./types.js";
 import { GitWorkspace } from "./git.js";
 import { JobStore } from "./store.js";
 import { ScheduleOneReferenceWorkspace } from "./references.js";
@@ -19,6 +28,7 @@ export class Worker {
     private readonly workspaces: GitWorkspace,
     private readonly references: ScheduleOneReferenceWorkspace,
     private readonly githubReadBroker: GitHubReadBrokerPort,
+    private readonly assetRipperReadBroker: AssetRipperReadBrokerPort,
   ) {}
 
   async start(): Promise<void> {
@@ -40,6 +50,7 @@ export class Worker {
   async process(job: Job): Promise<void> {
     let workspacePath: string | null = null;
     let githubReadSession: GitHubReadSession | null = null;
+    let assetRipperReadSession: AssetRipperReadSession | undefined;
     let statusCommentId: number | null = null;
     const startedAt = Date.now();
     try {
@@ -69,6 +80,7 @@ export class Worker {
       workspacePath = repository.path;
 
       const references = await this.references.prepare();
+      assetRipperReadSession = await this.assetRipperReadBroker.openSession(references.assetRipperPath);
       const result = await this.codex.run(
         repository.path,
         buildPrompt(
@@ -85,6 +97,7 @@ export class Worker {
           reasoningEffort: route.reasoningEffort,
           outputSchema: artifactOutputSchema,
           githubReadSession,
+          ...(assetRipperReadSession ? { assetRipperReadSession } : {}),
         },
       );
       assertNoSecrets(result.finalResponse);
@@ -160,6 +173,7 @@ export class Worker {
       ).catch(() => undefined);
     } finally {
       githubReadSession?.close();
+      assetRipperReadSession?.close();
       if (workspacePath) {
         await this.workspaces.cleanup(workspacePath).catch(() => undefined);
       }

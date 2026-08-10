@@ -122,8 +122,18 @@ persistent `/data/codex-home` volume. Treat that volume like a password.
 Expose port 8787 through an HTTPS reverse proxy and update the GitHub App's
 webhook URL. Verify `GET /health` before installing the App.
 
-To enable local AssetRipper evidence, mount the existing export outside `/app`
-and set its container path. Never copy it into this repository or image:
+To enable local AssetRipper evidence, first build a compact search corpus in an
+ignored directory. The command retains scenes, prefabs, serialized
+configuration, animation/controller data, and every `.meta` file, while
+dropping textures, meshes, audio, terrain data, and other large presentation
+assets:
+
+```sh
+bun run assetripper:prepare -- /absolute/AssetRipper_export/ExportedProject/Assets ./data/assetripper-corpus
+```
+
+Mount that corpus outside `/app` and set its container path. Never copy it into
+this repository or image:
 
 ```yaml
 services:
@@ -159,9 +169,23 @@ workspaces under `DATA_DIR`, so a hosted `DATA_DIR=/data` intentionally counts
 all of those against the persistent-volume limit. Workspaces are removed after
 each job.
 
-Do not upload an AssetRipper export to a hosted deployment. The default hosted
-configuration uses the runtime-cloned CodeArchiver source plus the bundled
-skill, and reports serialized evidence as unavailable.
+For a private hosted instance, upload only the compact corpus to the persistent
+volume; do not upload the raw AssetRipper export. With the Northflank CLI, a
+one-time upload to the existing Diffuin service is:
+
+```sh
+northflank upload service file \
+  --projectId diffuin \
+  --service diffuin \
+  --localPath ./data/assetripper-corpus/ \
+  --remotePath /data/references/assetripper
+```
+
+Set `SCHEDULE_ONE_ASSETRIPPER_PATH=/data/references/assetripper` on the service
+and redeploy it. Diffuin exposes the corpus to Codex only through a
+session-authenticated, read-only MCP broker; it does not add the volume path as
+a sandbox write root. Keep enough free volume capacity for `/data/codex-home`,
+the SQLite queue, cloned source references, and temporary workspaces.
 
 ## Use
 

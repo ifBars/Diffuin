@@ -12,7 +12,7 @@ RUN bun run build
 
 FROM node:24-trixie-slim AS runtime
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git tini \
+    && apt-get install -y --no-install-recommends ca-certificates git ripgrep tini \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production \

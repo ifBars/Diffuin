@@ -52,6 +52,24 @@ describe("buildCodexConfig", () => {
     });
     assert.doesNotMatch(JSON.stringify(config), /not-part-of-config/);
   });
+
+  it("registers the private asset broker without embedding its credential", () => {
+    const config = buildCodexConfig("high", undefined, {
+      url: "http://127.0.0.1:4567/mcp",
+      token: "private-asset-token",
+      close: () => undefined,
+    });
+
+    assert.deepEqual(config.mcp_servers, {
+      diffuin_assetripper: {
+        url: "http://127.0.0.1:4567/mcp",
+        bearer_token_env_var: "DIFFUIN_ASSETRIPPER_READ_TOKEN",
+        enabled: true,
+        required: true,
+      },
+    });
+    assert.doesNotMatch(JSON.stringify(config), /private-asset-token/);
+  });
 });
 
 async function* stream(events: ThreadEvent[]): AsyncGenerator<ThreadEvent> {
