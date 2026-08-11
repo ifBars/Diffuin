@@ -71,7 +71,7 @@ describe("buildPrompt", () => {
     assert.match(prompt, /diffuin_assetripper/);
     assert.match(prompt, /Private AssetRipper corpus: available through read-only tools/);
     assert.doesNotMatch(prompt, /\/data\/references\/assetripper/);
-    assert.match(prompt, /Do not edit files for review, explanation, investigation, or planning requests/);
+    assert.match(prompt, /For `answer`, `review`, `investigate`, and `plan` intents, do not edit repository files/);
     assert.match(prompt, /review-pull-request[\\/]SKILL\.md/);
   });
 
@@ -99,5 +99,26 @@ describe("buildPrompt", () => {
     assert.match(prompt, /Prior research identified the native registry seam/);
     assert.doesNotMatch(prompt, /@Diffuin polish the acceptance criteria/);
     assert.doesNotMatch(prompt, /git diff --find-renames/);
+  });
+
+  it("passes auto PR requests through and lets the agent select a workflow", () => {
+    const autoJob = { ...job, mode: "auto" as const, task: "How does x work in this PR?" };
+    const prompt = buildPrompt(
+      autoJob,
+      pullRequest,
+      pullRequest,
+      references,
+      "refs/diffuin/base",
+      { mode: "auto", model: "gpt-5.6-luna", reasoningEffort: "high", reason: "agent-directed request" },
+    );
+
+    assert.match(prompt, /How does x work in this PR\?/);
+    assert.match(prompt, /Interpret the authorized request by meaning and context, not by matching a fixed verb list/);
+    assert.match(prompt, /`review-pull-request`:/);
+    assert.match(prompt, /`change-pull-request`:/);
+    assert.match(prompt, /`none`: focused read-only questions/);
+    assert.match(prompt, /Always return `intent`/);
+    assert.match(prompt, /A question about how or why code works is normally `answer`/);
+    assert.match(prompt, /A request to alter code, regardless of phrasing, is `implement`/);
   });
 });

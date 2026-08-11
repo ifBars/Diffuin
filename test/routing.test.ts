@@ -51,9 +51,16 @@ describe("routeExecution", () => {
     assert.equal(routeExecution(job, pullRequest(), pullRequest(), config).reasoningEffort, "medium");
   });
 
-  it("keeps free-form PR review language read-only", () => {
+  it("passes free-form PR review language through for agent interpretation", () => {
     const automatic = { ...job, mode: "auto" as const, task: "review this change for regressions" };
-    assert.equal(routeExecution(automatic, pullRequest(), pullRequest(), config).mode, "review");
+    assert.equal(routeExecution(automatic, pullRequest(), pullRequest(), config).mode, "auto");
+  });
+
+  it("passes direct PR change language through without verb routing", () => {
+    const automatic = { ...job, mode: "auto" as const, task: "remove x from this PR" };
+    const route = routeExecution(automatic, pullRequest(), pullRequest(), config);
+    assert.equal(route.mode, "auto");
+    assert.equal(route.reason, "agent-directed request");
   });
 
   it("escalates a large review to max", () => {
@@ -70,14 +77,14 @@ describe("routeExecution", () => {
     );
   });
 
-  it("treats an open-PR follow-up as implementation", () => {
+  it("passes an open-PR follow-up through for agent interpretation", () => {
     const implementation = {
       ...job,
       kind: "issue" as const,
       mode: "auto" as const,
       task: "Open a PR against stable to fix the persistence issue.",
     };
-    assert.equal(routeExecution(implementation, { title: "Persistence bug", body: "Saved state resets." }, null, config).mode, "implement");
+    assert.equal(routeExecution(implementation, { title: "Persistence bug", body: "Saved state resets." }, null, config).mode, "auto");
   });
 
   it("routes source-backed issue research above a focused answer", () => {
@@ -93,7 +100,7 @@ describe("routeExecution", () => {
       null,
       config,
     );
-    assert.equal(route.mode, "investigate");
+    assert.equal(route.mode, "auto");
     assert.equal(route.reasoningEffort, "xhigh");
   });
 

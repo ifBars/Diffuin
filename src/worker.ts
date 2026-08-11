@@ -14,6 +14,7 @@ import type {
   PullRequestContext,
 } from "./types.js";
 import { GitWorkspace } from "./git.js";
+import { resolveArtifactIntent } from "./intent.js";
 import { JobStore } from "./store.js";
 import { ScheduleOneReferenceWorkspace } from "./references.js";
 
@@ -102,19 +103,20 @@ export class Worker {
       );
       assertNoSecrets(result.finalResponse);
       const artifact = parseArtifact(result.finalResponse);
-      const expectedKind = route.mode === "review" ? "review" : route.mode === "plan" ? "plan" : "response";
+      const intent = resolveArtifactIntent(job.kind, route.mode, artifact);
+      const expectedKind = intent === "review" ? "review" : intent === "plan" ? "plan" : "response";
       if (artifact.kind !== expectedKind) {
-        throw new Error(`Codex returned ${artifact.kind} output for a ${route.mode} request`);
+        throw new Error(`Codex returned ${artifact.kind} output for ${intent} intent`);
       }
-      const rendered = renderArtifact(artifact, route, {
+      const rendered = renderArtifact(artifact, { ...route, mode: intent }, {
         threadId: result.threadId,
         elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
-        includePlanImplementationAction: job.kind === "issue" && route.mode === "plan",
+        includePlanImplementationAction: job.kind === "issue" && intent === "plan",
       });
       assertNoSecrets(rendered.body);
 
       let issueUpdateNotice = "";
-      if (job.kind === "issue" && route.mode !== "implement" && artifact.issuePolish.needed) {
+      if (job.kind === "issue" && intent !== "implement" && artifact.issuePolish.needed) {
         const title = artifact.issuePolish.title.trim();
         const body = artifact.issuePolish.body.trim();
         if (!title || !body) {
@@ -127,11 +129,11 @@ export class Worker {
 
       const hasChanges = await this.workspaces.hasChanges(repository.path);
       if (!hasChanges) {
-        if (route.mode === "implement") {
+        if (intent === "implement") {
           throw new Error("Implementation was requested, but Codex produced no repository changes; no pull request was opened");
         }
         let body = `${issueUpdateNotice}${rendered.body}`;
-        if (job.kind === "pull_request" && route.mode === "review" && rendered.inlineComments.length) {
+        if (job.kind === "pull_request" && intent === "review" && rendered.inlineComments.length) {
           try {
             await this.github.reviewPullRequest(job, "", rendered.inlineComments);
           } catch {
@@ -143,17 +145,29 @@ export class Worker {
         return;
       }
 
-      if (route.mode !== "implement") {
-        throw new Error(`Codex modified files during a read-only ${route.mode} request; refusing to publish the patch`);
+      if (intent !== "implement") {
+        throw new Error(`Codex modified files during a read-only ${intent} request; refusing to publish the patch`);
       }
 
       const patch = await this.workspaces.readPatch(repository.path);
       assertNoSecrets(patch);
+      const updatesExistingPullRequest = isDiffuinOwnedPullRequest(job, pullRequest);
       const commitSha = await this.workspaces.commitAndPush(
         repository,
         token,
         `chore(diffuin): address #${job.issueNumber}`,
+        updatesExistingPullRequest ? pullRequest.headBranch : repository.branch,
       );
+      if (updatesExistingPullRequest) {
+        await this.github.addReaction(job, "rocket");
+        await this.replaceStatus(
+          job,
+          statusCommentId,
+          `I updated this pull request with commit [\`${commitSha.slice(0, 7)}\`](https://github.com/${job.repository}/commit/${commitSha}).`,
+        );
+        this.store.finish(job.id, "succeeded");
+        return;
+      }
       const created = await this.github.createPullRequest(job, {
         head: repository.branch,
         base: targetBranch,
@@ -188,6 +202,13 @@ export class Worker {
       await this.github.comment(job, body);
     }
   }
+}
+
+function isDiffuinOwnedPullRequest(job: Job, pullRequest: PullRequestContext | null): pullRequest is PullRequestContext {
+  return job.kind === "pull_request" && pullRequest !== null &&
+    pullRequest.headRepository.toLowerCase() === job.repository.toLowerCase() &&
+    /^diffuin\/\d+-[0-9a-f]{8}$/.test(pullRequest.headBranch) &&
+    (pullRequest.body?.includes("Diffuin job: `") ?? false);
 }
 
 function targetBranchFor(job: Job, pullRequest: PullRequestContext | null, defaultBranch: string): string {
@@ -240,6 +261,7 @@ function delay(milliseconds: number): Promise<void> {
 
 function presentParticiple(mode: string): string {
   switch (mode) {
+    case "auto": return "handling";
     case "review": return "reviewing";
     case "investigate": return "investigating";
     case "plan": return "planning";

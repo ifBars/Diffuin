@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import { artifactOutputSchema, parseArtifact, renderArtifact } from "../src/artifact.js";
 
 const base = {
+  intent: "review",
+  workflow: "review-pull-request",
   kind: "review",
   verdict: "changes_requested",
   confidence: "high",
@@ -68,6 +70,8 @@ describe("Diffuin artifacts", () => {
   it("collapses supporting evidence and validation in plans", () => {
     const artifact = parseArtifact(JSON.stringify({
       ...base,
+      intent: "plan",
+      workflow: "review-issue",
       kind: "plan",
       verdict: "not_applicable",
       findings: [],
@@ -93,7 +97,14 @@ describe("Diffuin artifacts", () => {
   });
 
   it("labels source-backed responses as investigations", () => {
-    const artifact = parseArtifact(JSON.stringify({ ...base, kind: "response", verdict: "not_applicable", findings: [] }));
+    const artifact = parseArtifact(JSON.stringify({
+      ...base,
+      intent: "investigate",
+      workflow: "review-issue",
+      kind: "response",
+      verdict: "not_applicable",
+      findings: [],
+    }));
     const rendered = renderArtifact(
       artifact,
       { mode: "investigate", model: "gpt-5.6-luna", reasoningEffort: "xhigh", reason: "non-trivial source-backed investigation" },

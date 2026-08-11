@@ -2,7 +2,7 @@ import type { Config } from "./config.js";
 import type { IssueContext, Job, PullRequestContext, ReasoningEffort, TaskMode, WorkRequest } from "./types.js";
 
 export interface ExecutionRoute {
-  mode: Exclude<TaskMode, "auto">;
+  mode: TaskMode;
   model: string;
   reasoningEffort: ReasoningEffort;
   reason: string;
@@ -31,7 +31,7 @@ export function routeExecution(
   pullRequest: PullRequestContext | null,
   config: RoutingConfig,
 ): ExecutionRoute {
-  const mode = job.mode === "auto" ? inferMode(job) : job.mode;
+  const mode = job.mode;
   const model = job.requestedModel ?? config.codexModel;
   if (job.requestedReasoningEffort) {
     return { mode, model, reasoningEffort: job.requestedReasoningEffort, reason: "explicit mention override" };
@@ -48,6 +48,16 @@ export function routeExecution(
   const text = [job.task, issue.title, issue.body ?? "", ...(pullRequest?.files ?? [])].join("\n");
   const riskMatches = text.match(new RegExp(HIGH_RISK.source, "gi"))?.length ?? 0;
   const changedLines = pullRequest ? pullRequest.additions + pullRequest.deletions : 0;
+
+  if (mode === "auto") {
+    const complex = riskMatches >= 1 || changedLines >= 600 || text.length > 4_000;
+    return {
+      mode,
+      model,
+      reasoningEffort: complex ? "xhigh" : "high",
+      reason: complex ? "complex agent-directed request" : "agent-directed request",
+    };
+  }
 
   if (mode === "plan") {
     const complex = text.length > 10_000 || (text.length > 5_000 && riskMatches >= 6);
@@ -99,24 +109,4 @@ export function routeExecution(
     reasoningEffort: needsDepth ? "high" : "medium",
     reason: needsDepth ? "source-backed technical answer" : "focused answer",
   };
-}
-
-function inferMode(job: Job): Exclude<TaskMode, "auto"> {
-  const task = job.task.trim();
-  if (
-    /\b(?:open|create|raise|submit|make)\s+(?:a\s+)?(?:pr|pull request)\b/i.test(task) ||
-    /^(?:(?:please|can you|could you|would you)\s+)?(?:implement|fix|change|add|remove|refactor|update|write)\b/i.test(task)
-  ) {
-    return "implement";
-  }
-  if (job.kind === "pull_request") {
-    return "review";
-  }
-  if (/\b(plan|planning|polish|scope|acceptance criteria|implementation-ready|roadmap)\b/i.test(task)) {
-    return "plan";
-  }
-  if (/\b(investigate|research|diagnose|root cause|analy[sz]e(?: this)? issue)\b/i.test(task)) {
-    return "investigate";
-  }
-  return "answer";
 }

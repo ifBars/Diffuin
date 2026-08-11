@@ -1,0 +1,4 @@
+interface:
+  display_name: "Change Pull Request"
+  short_description: "Apply requested changes to an existing PR"
+  default_prompt: "Use $change-pull-request to apply the maintainer's requested changes to this pull request."

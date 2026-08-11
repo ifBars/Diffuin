@@ -28,6 +28,8 @@ const job: Job = {
 };
 
 const response = JSON.stringify({
+  intent: "review",
+  workflow: "review-pull-request",
   kind: "review",
   verdict: "changes_requested",
   confidence: "high",
@@ -218,6 +220,8 @@ describe("Worker review delivery", () => {
         return {
           finalResponse: JSON.stringify({
             ...JSON.parse(response),
+            intent: "implement",
+            workflow: "implement-issue",
             kind: "response",
             verdict: "not_applicable",
             findings: [],
@@ -281,6 +285,106 @@ describe("Worker review delivery", () => {
     assert.equal(updates.at(-1), "I opened https://example.test/pull/44");
   });
 
+  it("pushes requested changes directly to a Diffuin-owned pull request branch", async () => {
+    const implementationJob: Job = {
+      ...job,
+      mode: "auto",
+      task: "remove x from this PR",
+    };
+    let pushedBranch = "";
+    let pullRequestCreated = false;
+    let finalComment = "";
+    let finished = "";
+    const github: GitHubPort = {
+      getActorPermission: async () => "write",
+      addReaction: async () => undefined,
+      comment: async () => 91,
+      updateComment: async (_request, _commentId, body) => { finalComment = body; },
+      reviewPullRequest: async () => undefined,
+      getDefaultBranch: async () => "stable",
+      getIssue: async () => ({ title: "unused", body: null }),
+      getPullRequest: async () => ({
+        title: "Diffuin implementation",
+        body: "Closes #11\n\nDiffuin job: `original-job`",
+        baseBranch: "stable",
+        headBranch: "diffuin/11-abcdef12",
+        headSha: "current-head",
+        headRepository: "ifBars/S1API",
+        additions: 20,
+        deletions: 2,
+        changedFiles: 2,
+        files: ["S1API/Example.cs"],
+      }),
+      getInstallationToken: async () => "token",
+      updateIssue: async () => undefined,
+      createPullRequest: async () => {
+        pullRequestCreated = true;
+        return { number: 99, url: "https://example.test/pull/99" };
+      },
+    };
+    const codex: CodexPort = {
+      run: async (_directory, prompt) => {
+        assert.match(prompt, /remove x from this PR/);
+        return {
+          finalResponse: JSON.stringify({
+            ...JSON.parse(response),
+            intent: "implement",
+            workflow: "change-pull-request",
+            kind: "response",
+            verdict: "not_applicable",
+            findings: [],
+            summary: "Removed x and updated the focused tests.",
+          }),
+          threadId: "thread",
+        };
+      },
+    };
+    const store = {
+      finish: (_id: string, status: string) => { finished = status; },
+    } as unknown as JobStore;
+    const workspaces = {
+      prepare: async (input: { sourceRef: string }) => {
+        assert.equal(input.sourceRef, "current-head");
+        return { path: "C:/temp/work", branch: "diffuin/12-new", remoteUrl: "https://example.test/repo.git" };
+      },
+      hasChanges: async () => true,
+      readPatch: async () => "diff --git a/file b/file",
+      commitAndPush: async (_repository: unknown, _token: string, _message: string, targetBranch: string) => {
+        pushedBranch = targetBranch;
+        return "1234567890abcdef";
+      },
+      cleanup: async () => undefined,
+    } as unknown as GitWorkspace;
+    const references = {
+      prepare: async () => ({ skillPath: "C:/skills/schedule-one-modding", warnings: [] }),
+    } as unknown as ScheduleOneReferenceWorkspace;
+    const config = {
+      port: 8787, githubAppId: 1, githubPrivateKey: "key", githubWebhookSecret: "test-webhook-secret",
+      handle: "Diffuin", allowedRepositories: new Set(["ifbars/s1api"]), dataDir: "C:/temp/data",
+      codexModel: "gpt-5.6-luna", allowedCodexModels: new Set(["gpt-5.6-luna"]),
+      codexReasoningEffort: "max" as const, autoReasoningRouting: true, jobPollIntervalMs: 1000,
+      scheduleOneSkillPath: "C:/skills/schedule-one-modding",
+      scheduleOneCodeArchiverUrl: "https://example.test/archive.git",
+    } satisfies Config;
+
+    await new Worker(
+      config,
+      store,
+      github,
+      codex,
+      workspaces,
+      references,
+      githubReadBroker,
+      assetRipperReadBroker,
+    ).process(implementationJob);
+
+    assert.equal(pushedBranch, "diffuin/11-abcdef12");
+    assert.equal(pullRequestCreated, false);
+    assert.equal(finished, "succeeded");
+    assert.match(finalComment, /updated this pull request with commit/);
+    assert.match(finalComment, /1234567/);
+  });
+
   it("polishes a basic issue before posting its investigation", async () => {
     const issueJob: Job = { ...job, kind: "issue", mode: "investigate", task: "Investigate this issue." };
     let updatedIssue: { title: string; body: string } | null = null;
@@ -302,6 +406,8 @@ describe("Worker review delivery", () => {
       run: async () => ({
         finalResponse: JSON.stringify({
           ...JSON.parse(response),
+          intent: "investigate",
+          workflow: "review-issue",
           kind: "response",
           verdict: "not_applicable",
           findings: [],

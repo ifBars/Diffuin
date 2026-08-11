@@ -23,6 +23,8 @@ const phaseSchema = z.object({
 });
 
 export const artifactSchema = z.object({
+  intent: z.enum(["review", "investigate", "plan", "implement", "answer"]),
+  workflow: z.enum(["review-pull-request", "change-pull-request", "review-issue", "implement-issue", "none"]),
   kind: z.enum(["review", "plan", "response"]),
   verdict: z.enum(["approve", "comment", "changes_requested", "not_applicable"]),
   confidence: z.enum(["low", "medium", "high"]),
@@ -50,10 +52,15 @@ export const artifactOutputSchema = {
   type: "object",
   additionalProperties: false,
   required: [
-    "kind", "verdict", "confidence", "summary", "findings", "evidence", "designChoices",
+    "intent", "workflow", "kind", "verdict", "confidence", "summary", "findings", "evidence", "designChoices",
     "phases", "validationPerformed", "validationRemaining", "openQuestions", "pullRequestTitle", "closesIssue", "issuePolish",
   ],
   properties: {
+    intent: { type: "string", enum: ["review", "investigate", "plan", "implement", "answer"] },
+    workflow: {
+      type: "string",
+      enum: ["review-pull-request", "change-pull-request", "review-issue", "implement-issue", "none"],
+    },
     kind: { type: "string", enum: ["review", "plan", "response"] },
     verdict: { type: "string", enum: ["approve", "comment", "changes_requested", "not_applicable"] },
     confidence: { type: "string", enum: ["low", "medium", "high"] },

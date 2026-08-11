@@ -69,13 +69,18 @@ export class GitWorkspace {
     return (await this.git(["diff", "--binary", "HEAD"], path)).stdout;
   }
 
-  async commitAndPush(repository: PreparedRepository, token: string, message: string): Promise<string> {
+  async commitAndPush(
+    repository: PreparedRepository,
+    token: string,
+    message: string,
+    targetBranch = repository.branch,
+  ): Promise<string> {
     await makeTreeWritable(join(repository.path, ".git"));
     await this.git(["add", "--all", "--", "."], repository.path);
     await this.git(["-c", "core.hooksPath=/dev/null", "commit", "-m", message], repository.path);
     const sha = (await this.git(["rev-parse", "HEAD"], repository.path)).stdout.trim();
     await this.git(
-      ["push", repository.remoteUrl, `HEAD:refs/heads/${repository.branch}`],
+      ["push", repository.remoteUrl, `HEAD:refs/heads/${targetBranch}`],
       repository.path,
       gitAuthEnvironment(token, join(this.root, ".home")),
     );

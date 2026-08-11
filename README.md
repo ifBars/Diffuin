@@ -38,13 +38,15 @@ conversation, Diffuin exposes a session-scoped, read-only GitHub tool broker.
 8. For pull requests, fetches the base branch so Codex can review the complete
    base-to-head diff.
 9. Scans the response and patch for common secret formats.
-10. Routes the request through a dedicated issue-review, issue-implementation,
-   or pull-request-review skill, then selects reasoning effort from task shape
-   and PR size unless the mention supplies an authorized override.
+10. Passes the authorized message to Codex, which interprets the requested
+    outcome and loads the applicable `review-issue`, `implement-issue`,
+    `review-pull-request`, or `change-pull-request` skill. Explicit command modes
+    remain hard constraints.
 11. Edits a single status comment into a compact review or plan. PR findings
     are posted on the relevant diff lines when GitHub accepts the location.
-12. Opens a pull request only when an explicitly requested implementation
-    changed files. Read-only review and planning jobs refuse to publish patches.
+12. Publishes changes only when Codex declares implementation intent and the
+    checkout actually changed. Read-only answers, reviews, investigations, and
+    plans refuse to publish patches.
 
 Diffuin does not have Schedule One or Unity. It must not claim in-game,
 Play Mode, Mono runtime, IL2CPP runtime, multiplayer, save/load, or full
@@ -209,14 +211,17 @@ Supported commands are `review`, `investigate`, `plan`, `implement`, and
 `answer`. Use `--` before free-form instructions when options are present.
 Supported reasoning levels are `minimal`, `low`, `medium`, `high`, `xhigh`,
 and `max`. Invalid or
-disallowed overrides are rejected before a job is queued. Existing free-form
-mentions continue to work and are routed automatically.
+disallowed overrides are rejected before a job is queued. Free-form mentions
+are passed through for the agent to interpret from their full meaning and PR or
+issue context.
 
 Implementation remains explicit:
 
 ```text
 @Diffuin fix the null dereference and add a regression test
 @Diffuin Open a PR against stable to fix the persistence issue
+@Diffuin move the validation helper beside the other test utilities
+@Diffuin How does the compatibility fallback work in this PR?
 ```
 
 Diffuin reacts with eyes when the request is queued. It comments with the review
@@ -234,9 +239,15 @@ most one implementation job; a failed run can still be retried with an explicit
 
 Diffuin includes recent issue or PR conversation in each job. Follow-up
 implementation requests therefore reuse earlier research instead of starting a
-new, potentially contradictory diagnosis. Requests to open, create, raise, or
-submit a PR are treated as implementation even without the literal word
-`implement`.
+new, potentially contradictory diagnosis. The agent distinguishes questions,
+reviews, plans, investigations, and requested changes from the whole message
+rather than a fixed implementation-verb list.
+
+On a pull request created by Diffuin, a direct request such as
+`@Diffuin remove the unused compatibility shim from this PR` commits and pushes
+the change back to that pull request's `diffuin/*` branch. Implementation
+requests on branches not owned by Diffuin continue to open a separate follow-up
+pull request instead of writing directly to a maintainer's branch.
 
 For read-only issue workflows, Diffuin may polish a materially basic issue title
 and description while preserving reporter facts and uncertainty. Already
