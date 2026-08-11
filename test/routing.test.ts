@@ -7,6 +7,7 @@ const config = {
   codexModel: "gpt-5.6-luna",
   allowedCodexModels: new Set(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]),
   sparkModels: new Set(["gpt-5.3-codex-spark"]),
+  sparkReasoningEffort: "medium" as const,
   codexReasoningEffort: "max" as const,
   autoReasoningRouting: true,
 };
@@ -148,8 +149,42 @@ describe("routeExecution", () => {
     ]) {
       const route = routeExecution({ ...job, task }, pullRequest(), pullRequest(), sparkConfig);
       assert.equal(route.model, "gpt-5.3-codex-spark");
+      assert.equal(route.reasoningEffort, "medium");
       assert.match(route.reason, /speed-prioritized review/);
     }
+  });
+
+  it("uses the Spark provider default for complex quick reviews", () => {
+    const sparkConfig = {
+      ...config,
+      allowedCodexModels: new Set([...config.allowedCodexModels, "gpt-5.3-codex-spark"]),
+    };
+    const complexPullRequest = pullRequest({ changedFiles: 25, additions: 2_000, deletions: 500 });
+    const route = routeExecution(
+      { ...job, task: "quick review" },
+      complexPullRequest,
+      complexPullRequest,
+      sparkConfig,
+    );
+    assert.equal(route.model, "gpt-5.3-codex-spark");
+    assert.equal(route.reasoningEffort, "medium");
+    assert.match(route.reason, /Spark provider default/);
+  });
+
+  it("preserves an explicit Spark reasoning override", () => {
+    const sparkConfig = {
+      ...config,
+      allowedCodexModels: new Set([...config.allowedCodexModels, "gpt-5.3-codex-spark"]),
+    };
+    const route = routeExecution(
+      { ...job, requestedModel: "gpt-5.3-codex-spark", requestedReasoningEffort: "high" },
+      pullRequest(),
+      pullRequest(),
+      sparkConfig,
+    );
+    assert.equal(route.model, "gpt-5.3-codex-spark");
+    assert.equal(route.reasoningEffort, "high");
+    assert.equal(route.reason, "explicit mention override");
   });
 
   it("keeps an explicit model override above the quick-review shortcut", () => {

@@ -10,7 +10,8 @@ export interface ExecutionRoute {
 
 type RoutingConfig = Pick<
   Config,
-  "allowedCodexModels" | "autoReasoningRouting" | "codexModel" | "codexReasoningEffort" | "sparkModels"
+  "allowedCodexModels" | "autoReasoningRouting" | "codexModel" | "codexReasoningEffort" | "sparkModels" |
+  "sparkReasoningEffort"
 >;
 
 interface EffortRoute {
@@ -163,11 +164,17 @@ function completeRoute(
   config: RoutingConfig,
   preferredModel?: string,
 ): ExecutionRoute {
+  const model = job.requestedModel ?? preferredModel ?? automaticModel(reasoningEffort, config);
+  const useSparkDefault = !job.requestedReasoningEffort && config.sparkModels.has(model);
+  const effectiveReasoningEffort = useSparkDefault ? config.sparkReasoningEffort : reasoningEffort;
+  const effectiveReason = useSparkDefault && effectiveReasoningEffort !== reasoningEffort
+    ? `${reason}; Spark provider default`
+    : reason;
   return {
     mode,
-    model: job.requestedModel ?? preferredModel ?? automaticModel(reasoningEffort, config),
-    reasoningEffort,
-    reason,
+    model,
+    reasoningEffort: effectiveReasoningEffort,
+    reason: effectiveReason,
   };
 }
 

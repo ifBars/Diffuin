@@ -63,10 +63,21 @@ not inherit the full issue or PR's complexity, while broad reviews still account
 for the complete diff. Mentions can override both model and reasoning within
 deployment-owned allowlists.
 
+Ambiguous middle cases receive a second, bounded routing decision from
+`gpt-5.6-luna` at `medium` reasoning. The advisor sees only task metadata,
+bounded issue text, diff counts, file names, the deterministic baseline, and
+the model allowlist. It runs read-only with network and web search disabled and
+returns a closed JSON schema. Explicit overrides, quick reviews, simple focused
+requests, disabled routing, and maximum-risk routes skip the advisor. Low
+confidence, invalid output, timeouts, and policy violations fall back to the
+deterministic route.
+
 Provider selection follows the routed model. The `gpt-5.6-*` models run through
 the Codex SDK. Models listed in `SPARK_MODELS` run through the custom Spark
 `automation --stdio` protocol; the default Spark model is
-`gpt-5.3-codex-spark`. Pull-request requests such as `quick review`, `fast PR
+`gpt-5.3-codex-spark`. Spark defaults to `medium` reasoning for a better
+latency-quality balance; an explicit `--effort` override still wins.
+Pull-request requests such as `quick review`, `fast PR
 review`, `review this quickly`, or `take a quick pass over this` select the
 configured Spark model. An explicit `--model` always wins over that shortcut.
 Both providers return the same structured artifact and go through the same
@@ -111,8 +122,12 @@ Copy `.env.example` to `.env`. Required values are:
 | `CODEX_ALLOWED_MODELS` | Comma-separated model allowlist for mention overrides |
 | `CODEX_REASONING_ROUTING` | Enables automatic reasoning selection; defaults to `true` |
 | `CODEX_REASONING_EFFORT` | Fixed fallback used when automatic routing is disabled |
+| `ROUTING_ADVISOR_ENABLED` | Enables the bounded Luna routing advisor for ambiguous cases; defaults to `true` |
+| `ROUTING_ADVISOR_MODEL` | Internal advisor model; defaults to `gpt-5.6-luna` |
+| `ROUTING_ADVISOR_TIMEOUT_MS` | Advisor timeout before deterministic fallback; defaults to 30 seconds |
 | `SPARK_COMMAND` | Spark executable name or absolute path; defaults to `spark` |
 | `SPARK_MODELS` | Comma-separated models dispatched through Spark; defaults to `gpt-5.3-codex-spark` |
+| `SPARK_REASONING_EFFORT` | Default effort for Spark-routed jobs; defaults to `medium` and explicit mention overrides still win |
 | `SPARK_TIMEOUT_MS` | Per-run Spark subprocess timeout; defaults to 30 minutes |
 | `SPARK_ALLOW_UNSANDBOXED_COMMANDS` | Enables Spark `cmd.exec`; defaults to `false` and requires separate host confinement |
 | `SCHEDULE_ONE_SKILL_PATH` | Bundled Schedule One skill directory; defaults to `./skills/schedule-one-modding` |

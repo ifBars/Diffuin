@@ -11,6 +11,7 @@ import { JobStore } from "./store.js";
 import { Worker } from "./worker.js";
 import { ScheduleOneReferenceWorkspace } from "./references.js";
 import { SparkClient } from "./spark.js";
+import { CodexRoutingAdvisor } from "./routing-advisor.js";
 
 const config = loadConfig();
 const store = new JobStore(join(config.dataDir, "diffuin.sqlite"));
@@ -35,6 +36,9 @@ const references = new ScheduleOneReferenceWorkspace(
   config.scheduleOneCodeArchiverUrl,
   config.scheduleOneAssetRipperPath,
 );
+const routingAdvisor = config.routingAdvisorEnabled
+  ? new CodexRoutingAdvisor(config)
+  : undefined;
 const worker = new Worker(
   config,
   store,
@@ -44,6 +48,7 @@ const worker = new Worker(
   references,
   githubReadBroker,
   assetRipperReadBroker,
+  routingAdvisor,
 );
 const server = createDiffuinServer(config, store, github);
 

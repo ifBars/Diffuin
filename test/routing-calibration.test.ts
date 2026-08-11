@@ -7,6 +7,7 @@ const config = {
   codexModel: "gpt-5.6-luna",
   allowedCodexModels: new Set(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]),
   sparkModels: new Set(["gpt-5.3-codex-spark"]),
+  sparkReasoningEffort: "medium" as const,
   codexReasoningEffort: "max" as const,
   autoReasoningRouting: true,
 };

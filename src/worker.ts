@@ -3,6 +3,7 @@ import { artifactOutputSchema, parseArtifact, renderArtifact, renderInlineFallba
 import type { Config } from "./config.js";
 import { buildPrompt } from "./prompt.js";
 import { routeExecution } from "./routing.js";
+import type { RoutingAdvisorPort } from "./routing-advisor.js";
 import { assertNoSecrets } from "./secrets.js";
 import type {
   AssetRipperReadBrokerPort,
@@ -31,6 +32,7 @@ export class Worker {
     private readonly references: ScheduleOneReferenceWorkspace,
     private readonly githubReadBroker: GitHubReadBrokerPort,
     private readonly assetRipperReadBroker: AssetRipperReadBrokerPort,
+    private readonly routingAdvisor?: RoutingAdvisorPort,
   ) {}
 
   async start(): Promise<void> {
@@ -59,7 +61,8 @@ export class Worker {
       const pullRequest = job.kind === "pull_request" ? await this.github.getPullRequest(job) : null;
       const issue = pullRequest ?? await this.github.getIssue(job);
       githubReadSession = this.githubReadBroker.openSession(job, issue);
-      const route = routeExecution(job, issue, pullRequest, this.config);
+      const baselineRoute = routeExecution(job, issue, pullRequest, this.config);
+      const route = await this.advisedRoute(job, issue, pullRequest, baselineRoute);
       statusCommentId = await this.github.comment(
         job,
         `I'm ${presentParticiple(route.mode)} this ${job.kind === "pull_request" ? "pull request" : "issue"}.\n\n` +
@@ -199,6 +202,24 @@ export class Worker {
       if (workspacePath) {
         await this.workspaces.cleanup(workspacePath).catch(() => undefined);
       }
+    }
+  }
+
+  private async advisedRoute(
+    job: Job,
+    issue: Parameters<RoutingAdvisorPort["advise"]>[1],
+    pullRequest: PullRequestContext | null,
+    baseline: Parameters<RoutingAdvisorPort["advise"]>[3],
+  ) {
+    if (!this.routingAdvisor) {
+      return baseline;
+    }
+    try {
+      return await this.routingAdvisor.advise(job, issue, pullRequest, baseline) ?? baseline;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Routing advisor failed; using deterministic route: ${message.slice(0, 500)}`);
+      return baseline;
     }
   }
 
