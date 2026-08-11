@@ -118,6 +118,7 @@ describe("Worker review delivery", () => {
         assert.equal(options.reasoningEffort, "medium");
         assert.equal(options.githubReadSession?.token, "session-token");
         assert.equal(options.assetRipperReadSession?.token, "asset-session-token");
+        assert.deepEqual(options.readRoots, ["C:/skills"]);
         return { finalResponse: response, threadId: "thread" };
       },
     };
@@ -148,6 +149,10 @@ describe("Worker review delivery", () => {
       allowedCodexModels: new Set(["gpt-5.6-luna"]),
       codexReasoningEffort: "max",
       autoReasoningRouting: true,
+      sparkCommand: "spark",
+      sparkModels: new Set(["gpt-5.3-codex-spark"]),
+      sparkTimeoutMs: 30 * 60 * 1000,
+      sparkAllowUnsandboxedCommands: false,
       jobPollIntervalMs: 1000,
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/s1-codearchiver.git",
@@ -261,6 +266,10 @@ describe("Worker review delivery", () => {
       allowedCodexModels: new Set(["gpt-5.6-luna"]),
       codexReasoningEffort: "max",
       autoReasoningRouting: true,
+      sparkCommand: "spark",
+      sparkModels: new Set(["gpt-5.3-codex-spark"]),
+      sparkTimeoutMs: 30 * 60 * 1000,
+      sparkAllowUnsandboxedCommands: false,
       jobPollIntervalMs: 1000,
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/s1-codearchiver.git",
@@ -363,6 +372,8 @@ describe("Worker review delivery", () => {
       handle: "Diffuin", allowedRepositories: new Set(["ifbars/s1api"]), dataDir: "C:/temp/data",
       codexModel: "gpt-5.6-luna", allowedCodexModels: new Set(["gpt-5.6-luna"]),
       codexReasoningEffort: "max" as const, autoReasoningRouting: true, jobPollIntervalMs: 1000,
+      sparkCommand: "spark", sparkModels: new Set(["gpt-5.3-codex-spark"]),
+      sparkTimeoutMs: 30 * 60 * 1000, sparkAllowUnsandboxedCommands: false,
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/archive.git",
     } satisfies Config;
@@ -436,6 +447,8 @@ describe("Worker review delivery", () => {
       handle: "Diffuin", allowedRepositories: new Set(["ifbars/s1api"]), dataDir: "C:/temp/data",
       codexModel: "gpt-5.6-luna", allowedCodexModels: new Set(["gpt-5.6-luna"]),
       codexReasoningEffort: "max" as const, autoReasoningRouting: true, jobPollIntervalMs: 1000,
+      sparkCommand: "spark", sparkModels: new Set(["gpt-5.3-codex-spark"]),
+      sparkTimeoutMs: 30 * 60 * 1000, sparkAllowUnsandboxedCommands: false,
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/archive.git",
     } satisfies Config;

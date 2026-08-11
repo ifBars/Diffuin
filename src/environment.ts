@@ -11,6 +11,9 @@ const SAFE_KEYS = [
   "TEMP",
   "LANG",
   "LC_ALL",
+  "XDG_DATA_HOME",
+  "SPARK_CMD_EXEC_DOCKER_CONTAINER",
+  "SPARK_CMD_EXEC_DOCKER_WORKDIR",
 ] as const;
 
 export function sanitizedEnvironment(overrides: Record<string, string> = {}): Record<string, string> {

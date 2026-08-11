@@ -6,6 +6,7 @@ import type { Job, PullRequestContext } from "../src/types.js";
 const config = {
   codexModel: "gpt-5.6-luna",
   allowedCodexModels: new Set(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]),
+  sparkModels: new Set(["gpt-5.3-codex-spark"]),
   codexReasoningEffort: "max" as const,
   autoReasoningRouting: true,
 };
@@ -131,6 +132,66 @@ describe("routeExecution", () => {
     const route = routeExecution(explicit, pullRequest(), pullRequest(), config);
     assert.equal(route.model, "gpt-5.6-sol");
     assert.equal(route.reasoningEffort, "xhigh");
+  });
+
+  it("routes speed-prioritized pull-request reviews through Spark", () => {
+    const sparkConfig = {
+      ...config,
+      allowedCodexModels: new Set([...config.allowedCodexModels, "gpt-5.3-codex-spark"]),
+    };
+    for (const task of [
+      "quick review",
+      "fast PR review please",
+      "review this quickly",
+      "quickly review this",
+      "take a quick pass over this",
+    ]) {
+      const route = routeExecution({ ...job, task }, pullRequest(), pullRequest(), sparkConfig);
+      assert.equal(route.model, "gpt-5.3-codex-spark");
+      assert.match(route.reason, /speed-prioritized review/);
+    }
+  });
+
+  it("keeps an explicit model override above the quick-review shortcut", () => {
+    const sparkConfig = {
+      ...config,
+      allowedCodexModels: new Set([...config.allowedCodexModels, "gpt-5.3-codex-spark"]),
+    };
+    const route = routeExecution(
+      { ...job, task: "quick review", requestedModel: "gpt-5.6-sol" },
+      pullRequest(),
+      pullRequest(),
+      sparkConfig,
+    );
+    assert.equal(route.model, "gpt-5.6-sol");
+  });
+
+  it("respects disabled automatic routing for quick reviews", () => {
+    const route = routeExecution(
+      { ...job, task: "quick review" },
+      pullRequest(),
+      pullRequest(),
+      {
+        ...config,
+        autoReasoningRouting: false,
+        allowedCodexModels: new Set([...config.allowedCodexModels, "gpt-5.3-codex-spark"]),
+      },
+    );
+    assert.equal(route.model, "gpt-5.6-luna");
+  });
+
+  it("does not route unrelated fast wording through Spark", () => {
+    const sparkConfig = {
+      ...config,
+      allowedCodexModels: new Set([...config.allowedCodexModels, "gpt-5.3-codex-spark"]),
+    };
+    const route = routeExecution(
+      { ...job, mode: "auto", task: "fix the fast-path cache invalidation" },
+      pullRequest(),
+      pullRequest(),
+      sparkConfig,
+    );
+    assert.notEqual(route.model, "gpt-5.3-codex-spark");
   });
 
   it("uses the configured fallback when the preferred routed model is unavailable", () => {

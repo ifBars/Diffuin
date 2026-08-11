@@ -10,7 +10,7 @@ export interface ExecutionRoute {
 
 type RoutingConfig = Pick<
   Config,
-  "allowedCodexModels" | "autoReasoningRouting" | "codexModel" | "codexReasoningEffort"
+  "allowedCodexModels" | "autoReasoningRouting" | "codexModel" | "codexReasoningEffort" | "sparkModels"
 >;
 
 interface EffortRoute {
@@ -24,6 +24,11 @@ const DEEP_MODEL = "gpt-5.6-luna";
 const SOURCE_BACKED = /\b(research|investigat(?:e|ion)|analy[sz]e|implementation(?:-ready)? plan|plan (?:this|the|an?))\b/i;
 const BROAD_SCOPE = /\b(all|every|entire|comprehensive|thorough|exhaustive|repository-wide|repo-wide|codebase-wide|across (?:the )?(?:repository|codebase|modules?))\b/i;
 const REVIEW_REQUEST = /\b(review|audit)\b/i;
+const SPEED_REVIEW_SIGNALS = [
+  /\b(?:quick|fast|rapid|speedy)\s+(?:(?:code|pr|pull request)\s+)?(?:review|audit|pass|look)\b/i,
+  /\b(?:review|audit)\s+(?:this\s+)?(?:quickly|fast|rapidly)\b/i,
+  /\b(?:quickly|rapidly)\s+(?:review|audit)\b/i,
+] as const;
 const FOCUSED_QUESTION = /^\s*(?:please\s+)?(?:how|what|why|where|which|can|does|do|is|are)\b/i;
 const FOCUSED_CHANGE = /^\s*(?:please\s+)?(?:add|change|delete|drop|fix|move|remove|rename|replace|restore|revert|update)\b/i;
 
@@ -60,12 +65,18 @@ export function routeExecution(
   config: RoutingConfig,
 ): ExecutionRoute {
   const mode = job.mode;
+  const speedReviewRequested = config.autoReasoningRouting && pullRequest !== null &&
+    (mode === "review" || mode === "auto") &&
+    SPEED_REVIEW_SIGNALS.some((signal) => signal.test(job.task));
+  const speedReviewModel = speedReviewRequested
+    ? configuredSparkModel(config)
+    : undefined;
   if (!config.autoReasoningRouting) {
-    return completeRoute(mode, config.codexReasoningEffort, "automatic routing disabled", job, config);
+    return completeRoute(mode, config.codexReasoningEffort, "automatic routing disabled", job, config, speedReviewModel);
   }
 
   if (job.requestedReasoningEffort) {
-    return completeRoute(mode, job.requestedReasoningEffort, "explicit mention override", job, config);
+    return completeRoute(mode, job.requestedReasoningEffort, "explicit mention override", job, config, speedReviewModel);
   }
 
   const task = job.task.trim();
@@ -97,7 +108,8 @@ export function routeExecution(
     effort = { reasoningEffort: "medium", reason: "focused request" };
   }
 
-  return completeRoute(mode, effort.reasoningEffort, effort.reason, job, config);
+  const reason = speedReviewModel ? `speed-prioritized review; ${effort.reason}` : effort.reason;
+  return completeRoute(mode, effort.reasoningEffort, reason, job, config, speedReviewModel);
 }
 
 function routeSourceBacked(
@@ -149,13 +161,18 @@ function completeRoute(
   reason: string,
   job: Job,
   config: RoutingConfig,
+  preferredModel?: string,
 ): ExecutionRoute {
   return {
     mode,
-    model: job.requestedModel ?? automaticModel(reasoningEffort, config),
+    model: job.requestedModel ?? preferredModel ?? automaticModel(reasoningEffort, config),
     reasoningEffort,
     reason,
   };
+}
+
+function configuredSparkModel(config: RoutingConfig): string | undefined {
+  return [...config.sparkModels].find((model) => config.allowedCodexModels.has(model));
 }
 
 function automaticModel(reasoningEffort: ReasoningEffort, config: RoutingConfig): string {

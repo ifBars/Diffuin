@@ -1,6 +1,7 @@
 export type TriggerKind = "issue" | "pull_request";
 export type TaskMode = "auto" | "review" | "investigate" | "plan" | "implement" | "answer";
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type HarnessProvider = "codex" | "spark";
 
 export interface MentionCommand {
   task: string;
@@ -123,6 +124,7 @@ export interface GitHubPort {
 export interface CodexResult {
   finalResponse: string;
   threadId: string;
+  provider?: HarnessProvider;
 }
 
 export interface CodexPort {
@@ -133,6 +135,7 @@ export interface CodexPort {
       model: string;
       reasoningEffort: ReasoningEffort;
       outputSchema: object;
+      readRoots?: readonly string[];
       githubReadSession?: GitHubReadSession;
       assetRipperReadSession?: AssetRipperReadSession;
     },

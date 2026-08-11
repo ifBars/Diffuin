@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { CodexClient } from "./codex.js";
+import { ModelRoutedHarness } from "./harness.js";
 import { AssetRipperReadBroker } from "./assetripper-read-broker.js";
 import { loadConfig } from "./config.js";
 import { GitWorkspace } from "./git.js";
@@ -9,6 +10,7 @@ import { createDiffuinServer } from "./server.js";
 import { JobStore } from "./store.js";
 import { Worker } from "./worker.js";
 import { ScheduleOneReferenceWorkspace } from "./references.js";
+import { SparkClient } from "./spark.js";
 
 const config = loadConfig();
 const store = new JobStore(join(config.dataDir, "diffuin.sqlite"));
@@ -17,7 +19,16 @@ const githubReadBroker = new GitHubReadBroker(github);
 await githubReadBroker.start();
 const assetRipperReadBroker = new AssetRipperReadBroker();
 await assetRipperReadBroker.start();
-const codex = new CodexClient(config.dataDir);
+const codex = new ModelRoutedHarness(
+  new CodexClient(config.dataDir),
+  new SparkClient(
+    config.sparkCommand,
+    config.dataDir,
+    config.sparkTimeoutMs,
+    config.sparkAllowUnsandboxedCommands,
+  ),
+  config.sparkModels,
+);
 const references = new ScheduleOneReferenceWorkspace(
   config.dataDir,
   config.scheduleOneSkillPath,

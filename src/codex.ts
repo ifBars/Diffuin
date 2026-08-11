@@ -53,7 +53,7 @@ export class CodexClient implements CodexPort {
     if (!thread.id) {
       throw new Error("Codex completed without returning a thread ID");
     }
-    return { finalResponse, threadId: thread.id };
+    return { finalResponse, threadId: thread.id, provider: "codex" };
   }
 }
 

@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import { artifactOutputSchema, parseArtifact, renderArtifact, renderInlineFallback } from "./artifact.js";
 import type { Config } from "./config.js";
 import { buildPrompt } from "./prompt.js";
@@ -97,6 +98,11 @@ export class Worker {
           model: route.model,
           reasoningEffort: route.reasoningEffort,
           outputSchema: artifactOutputSchema,
+          readRoots: [
+            dirname(references.skillPath),
+            references.regularSourcePath,
+            references.betaSourcePath,
+          ].filter((path): path is string => Boolean(path)),
           githubReadSession,
           ...(assetRipperReadSession ? { assetRipperReadSession } : {}),
         },
@@ -106,10 +112,11 @@ export class Worker {
       const intent = resolveArtifactIntent(job.kind, route.mode, artifact);
       const expectedKind = intent === "review" ? "review" : intent === "plan" ? "plan" : "response";
       if (artifact.kind !== expectedKind) {
-        throw new Error(`Codex returned ${artifact.kind} output for ${intent} intent`);
+        throw new Error(`Agent returned ${artifact.kind} output for ${intent} intent`);
       }
       const rendered = renderArtifact(artifact, { ...route, mode: intent }, {
         threadId: result.threadId,
+        ...(result.provider ? { provider: result.provider } : {}),
         elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
         includePlanImplementationAction: job.kind === "issue" && intent === "plan",
       });
@@ -120,7 +127,7 @@ export class Worker {
         const title = artifact.issuePolish.title.trim();
         const body = artifact.issuePolish.body.trim();
         if (!title || !body) {
-          throw new Error("Codex requested an issue polish without a complete replacement title and body");
+          throw new Error("Agent requested an issue polish without a complete replacement title and body");
         }
         assertNoSecrets(`${title}\n${body}`);
         await this.github.updateIssue(job, { title, body });
@@ -130,7 +137,7 @@ export class Worker {
       const hasChanges = await this.workspaces.hasChanges(repository.path);
       if (!hasChanges) {
         if (intent === "implement") {
-          throw new Error("Implementation was requested, but Codex produced no repository changes; no pull request was opened");
+          throw new Error("Implementation was requested, but the agent produced no repository changes; no pull request was opened");
         }
         let body = `${issueUpdateNotice}${rendered.body}`;
         if (job.kind === "pull_request" && intent === "review" && rendered.inlineComments.length) {
@@ -146,7 +153,7 @@ export class Worker {
       }
 
       if (intent !== "implement") {
-        throw new Error(`Codex modified files during a read-only ${intent} request; refusing to publish the patch`);
+        throw new Error(`The agent modified files during a read-only ${intent} request; refusing to publish the patch`);
       }
 
       const patch = await this.workspaces.readPatch(repository.path);

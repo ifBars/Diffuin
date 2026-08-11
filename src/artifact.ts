@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ExecutionRoute } from "./routing.js";
 import { renderPlanAction } from "./plan-action.js";
+import type { HarnessProvider } from "./types.js";
 
 const findingSchema = z.object({
   severity: z.enum(["P0", "P1", "P2"]),
@@ -138,7 +139,7 @@ export function parseArtifact(value: string): DiffuinArtifact {
 export function renderArtifact(
   artifact: DiffuinArtifact,
   route: ExecutionRoute,
-  metadata: { threadId: string; elapsedSeconds: number; includePlanImplementationAction?: boolean },
+  metadata: { threadId: string; elapsedSeconds: number; provider?: HarnessProvider; includePlanImplementationAction?: boolean },
 ): { body: string; inlineComments: Array<{ path: string; line: number; body: string }> } {
   const inlineComments = artifact.findings
     .filter((finding) => finding.path && finding.line > 0)
@@ -225,8 +226,13 @@ function section(title: string, values: string[], numbered = false): string {
   return `\n\n### ${title}\n\n${values.map((value, index) => numbered ? `${index + 1}. ${value}` : `- ${value}`).join("\n")}`;
 }
 
-function renderMetadata(route: ExecutionRoute, metadata: { threadId: string; elapsedSeconds: number }): string {
-  return `<details>\n<summary>Diffuin run details</summary>\n\n- Model: \`${route.model}\`\n- Reasoning: \`${route.reasoningEffort}\` (${route.reason})\n- Elapsed: ${metadata.elapsedSeconds}s\n- Codex thread: \`${metadata.threadId}\`\n\n</details>`;
+function renderMetadata(
+  route: ExecutionRoute,
+  metadata: { threadId: string; elapsedSeconds: number; provider?: HarnessProvider },
+): string {
+  const provider = metadata.provider ?? "codex";
+  const runLabel = provider === "spark" ? "Spark run" : "Codex thread";
+  return `<details>\n<summary>Diffuin run details</summary>\n\n- Provider: \`${provider}\`\n- Model: \`${route.model}\`\n- Reasoning: \`${route.reasoningEffort}\` (${route.reason})\n- Elapsed: ${metadata.elapsedSeconds}s\n- ${runLabel}: \`${metadata.threadId}\`\n\n</details>`;
 }
 
 function label(value: string): string {

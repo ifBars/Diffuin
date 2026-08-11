@@ -1,7 +1,7 @@
 # Diffuin
 
 Diffuin is a small, self-hosted GitHub App for Schedule One mod repositories.
-An `@Diffuin` mention asks Codex to review a pull request against game source,
+An `@Diffuin` mention asks a configured coding-agent harness to review a pull request against game source,
 refine or plan an issue, answer a focused modding question, or implement an
 explicitly requested change.
 
@@ -27,24 +27,25 @@ conversation, Diffuin exposes a session-scoped, read-only GitHub tool broker.
    write-equivalent permission.
 4. Queues the delivery idempotently in SQLite.
 5. Refreshes regular (`alternate`) and beta (`alternate-beta`) game-source
-   references before starting Codex.
+   references before starting the selected harness.
 6. Starts a short-lived localhost GitHub read session scoped to the current and
    explicitly mentioned repositories. Public repositories are readable;
    private repositories additionally require the requesting actor to have
    access through the App installation.
-7. Runs Codex in a fresh checkout with `workspace-write`, no approvals, and no
-   general network access. Reference directories are readable but outside the
-   writable checkout. The only remote research surface is the read-only broker.
+7. Runs the selected Codex or Spark provider in a fresh checkout. Reference
+   directories are readable but outside the writable checkout, and the only
+   model-visible remote research surface is the read-only broker. Spark command
+   execution is disabled by default because its command tool is not an OS sandbox.
 8. For pull requests, fetches the base branch so Codex can review the complete
    base-to-head diff.
 9. Scans the response and patch for common secret formats.
-10. Passes the authorized message to Codex, which interprets the requested
+10. Passes the authorized message to the selected harness, which interprets the requested
     outcome and loads the applicable `review-issue`, `implement-issue`,
     `review-pull-request`, or `change-pull-request` skill. Explicit command modes
     remain hard constraints.
 11. Edits a single status comment into a compact review or plan. PR findings
     are posted on the relevant diff lines when GitHub accepts the location.
-12. Publishes changes only when Codex declares implementation intent and the
+12. Publishes changes only when the harness declares implementation intent and the
     checkout actually changed. Read-only answers, reviews, investigations, and
     plans refuse to publish patches.
 
@@ -61,6 +62,15 @@ large reviews. The latest request drives the route: a small PR follow-up does
 not inherit the full issue or PR's complexity, while broad reviews still account
 for the complete diff. Mentions can override both model and reasoning within
 deployment-owned allowlists.
+
+Provider selection follows the routed model. The `gpt-5.6-*` models run through
+the Codex SDK. Models listed in `SPARK_MODELS` run through the custom Spark
+`automation --stdio` protocol; the default Spark model is
+`gpt-5.3-codex-spark`. Pull-request requests such as `quick review`, `fast PR
+review`, `review this quickly`, or `take a quick pass over this` select the
+configured Spark model. An explicit `--model` always wins over that shortcut.
+Both providers return the same structured artifact and go through the same
+secret scan, intent validation, read-only-change guard, and GitHub delivery path.
 
 ## GitHub App setup
 
@@ -101,6 +111,10 @@ Copy `.env.example` to `.env`. Required values are:
 | `CODEX_ALLOWED_MODELS` | Comma-separated model allowlist for mention overrides |
 | `CODEX_REASONING_ROUTING` | Enables automatic reasoning selection; defaults to `true` |
 | `CODEX_REASONING_EFFORT` | Fixed fallback used when automatic routing is disabled |
+| `SPARK_COMMAND` | Spark executable name or absolute path; defaults to `spark` |
+| `SPARK_MODELS` | Comma-separated models dispatched through Spark; defaults to `gpt-5.3-codex-spark` |
+| `SPARK_TIMEOUT_MS` | Per-run Spark subprocess timeout; defaults to 30 minutes |
+| `SPARK_ALLOW_UNSANDBOXED_COMMANDS` | Enables Spark `cmd.exec`; defaults to `false` and requires separate host confinement |
 | `SCHEDULE_ONE_SKILL_PATH` | Bundled Schedule One skill directory; defaults to `./skills/schedule-one-modding` |
 | `SCHEDULE_ONE_CODE_ARCHIVER_URL` | Runtime source for regular/beta stripped-code references |
 | `SCHEDULE_ONE_ASSETRIPPER_PATH` | Optional read-only AssetRipper export mount for local/self-hosted use |
@@ -108,7 +122,7 @@ Copy `.env.example` to `.env`. Required values are:
 `DIFFUIN_HANDLE`, `DATA_DIR`, the Codex routing settings, the Schedule One
 reference settings, and the port have defaults shown in `.env.example`.
 
-The GitHub broker binds only to `127.0.0.1`. Codex receives a random session
+The GitHub broker binds only to `127.0.0.1`. The selected harness receives a random session
 credential that expires after 30 minutes and is destroyed when the job ends;
 it never receives the GitHub App installation token. The broker has no mutation
 tools, limits repositories and response sizes, strips search scope qualifiers,
@@ -129,6 +143,12 @@ docker compose exec diffuin codex login --device-auth
 
 The device login stores and refreshes ChatGPT-managed Codex credentials in the
 persistent `/data/codex-home` volume. Treat that volume like a password.
+
+The Docker image downloads the pinned Spark 0.9.1 Linux release and verifies its
+published SHA-256 before installation. It reserves `/data/spark-data` as
+Spark's persistent XDG data directory. When Spark has no dedicated saved login,
+Diffuin points it at `/data/codex-home`, allowing Spark to reuse the existing
+ChatGPT-managed Codex tokens without placing them in prompts or job artifacts.
 
 Expose port 8787 through an HTTPS reverse proxy and update the GitHub App's
 webhook URL. Verify `GET /health` before installing the App.
@@ -212,6 +232,8 @@ Explicit commands support safe per-request overrides:
 
 ```text
 @Diffuin review --model gpt-5.6-terra --effort high
+@Diffuin quick review
+@Diffuin review --model gpt-5.3-codex-spark -- focus on correctness regressions
 @Diffuin investigate --model gpt-5.6-luna -- research the likely lifecycle seam
 @Diffuin plan --model gpt-5.6-luna --effort xhigh -- focus on persistence and multiplayer authority
 ```
@@ -237,8 +259,8 @@ Diffuin reacts with eyes when the request is queued. It comments with the review
 or plan when no files changed, and posts a pull-request URL when an explicit
 implementation request produced a patch. Reviews and plans use bounded,
 structured sections instead of slicing long Markdown. Every delivered artifact
-ends with an AI-generated accuracy notice and includes collapsed model,
-reasoning, elapsed-time, and Codex-thread metadata.
+ends with an AI-generated accuracy notice and includes collapsed provider,
+model, reasoning, elapsed-time, and provider-run metadata.
 
 Issue plans include an unchecked action at the end. A repository maintainer can
 check it to ask Diffuin to implement that exact plan, open a pull request, and
@@ -272,7 +294,9 @@ bun run build
 ```
 
 The application runtime is Node.js 24 because that is the supported server-side
-runtime for the Codex SDK. Bun is used for package management and scripts.
+runtime for the Codex SDK. Bun is used for package management and scripts. The
+Spark integration is a subprocess provider for the versioned
+`spark.automation.v1` protocol exposed by `spark automation --stdio`.
 
 ## Security and game-artifact boundary
 

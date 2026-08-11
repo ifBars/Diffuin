@@ -13,9 +13,13 @@ const schema = z.object({
   ALLOWED_REPOSITORIES: z.string().min(1),
   DATA_DIR: z.string().default("./data"),
   CODEX_MODEL: z.string().default("gpt-5.6-luna"),
-  CODEX_ALLOWED_MODELS: z.string().default("gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol"),
+  CODEX_ALLOWED_MODELS: z.string().default("gpt-5.6-luna,gpt-5.6-terra,gpt-5.6-sol,gpt-5.3-codex-spark"),
   CODEX_REASONING_EFFORT: z.enum(["minimal", "low", "medium", "high", "xhigh", "max"]).default("max"),
   CODEX_REASONING_ROUTING: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+  SPARK_COMMAND: z.string().min(1).default("spark"),
+  SPARK_MODELS: z.string().default("gpt-5.3-codex-spark"),
+  SPARK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60 * 60 * 1000).default(30 * 60 * 1000),
+  SPARK_ALLOW_UNSANDBOXED_COMMANDS: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   JOB_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(1000),
   SCHEDULE_ONE_SKILL_PATH: z.string().min(1).default("./skills/schedule-one-modding"),
   SCHEDULE_ONE_CODE_ARCHIVER_URL: z.string().url().default("https://github.com/k073l/s1-codearchiver.git"),
@@ -37,6 +41,10 @@ export interface Config {
   allowedCodexModels: ReadonlySet<string>;
   codexReasoningEffort: ReasoningEffort;
   autoReasoningRouting: boolean;
+  sparkCommand: string;
+  sparkModels: ReadonlySet<string>;
+  sparkTimeoutMs: number;
+  sparkAllowUnsandboxedCommands: boolean;
   jobPollIntervalMs: number;
   scheduleOneSkillPath: string;
   scheduleOneCodeArchiverUrl: string;
@@ -52,6 +60,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     parsed.CODEX_ALLOWED_MODELS.split(",").map((value) => value.trim()).filter(Boolean),
   );
   allowedCodexModels.add(parsed.CODEX_MODEL);
+  const sparkModels = new Set(
+    parsed.SPARK_MODELS.split(",").map((value) => value.trim()).filter(Boolean),
+  );
+  for (const model of sparkModels) allowedCodexModels.add(model);
 
   return {
     port: parsed.PORT,
@@ -67,6 +79,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     allowedCodexModels,
     codexReasoningEffort: parsed.CODEX_REASONING_EFFORT,
     autoReasoningRouting: parsed.CODEX_REASONING_ROUTING,
+    sparkCommand: parsed.SPARK_COMMAND,
+    sparkModels,
+    sparkTimeoutMs: parsed.SPARK_TIMEOUT_MS,
+    sparkAllowUnsandboxedCommands: parsed.SPARK_ALLOW_UNSANDBOXED_COMMANDS,
     jobPollIntervalMs: parsed.JOB_POLL_INTERVAL_MS,
     scheduleOneSkillPath: resolve(parsed.SCHEDULE_ONE_SKILL_PATH),
     scheduleOneCodeArchiverUrl: parsed.SCHEDULE_ONE_CODE_ARCHIVER_URL,
