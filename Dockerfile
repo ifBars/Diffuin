@@ -21,7 +21,7 @@ RUN apt-get update \
       --output /tmp/spark.zip \
     && echo "${SPARK_LINUX_X64_SHA256}  /tmp/spark.zip" | sha256sum --check --strict \
     && unzip -q /tmp/spark.zip -d /tmp/spark \
-    && install -m 0755 "/tmp/spark/spark-${SPARK_VERSION}-linux-x64/spark" /usr/local/bin/spark
+    && install -m 0755 /tmp/spark/spark /usr/local/bin/spark
 
 FROM node:24-trixie-slim AS runtime
 RUN apt-get update \
