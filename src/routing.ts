@@ -13,7 +13,35 @@ type RoutingConfig = Pick<
   "allowedCodexModels" | "autoReasoningRouting" | "codexModel" | "codexReasoningEffort"
 >;
 
-const HIGH_RISK = /\b(network|multiplayer|fishnet|rpc|authority|server|client|save|load|persist|migration|il2cpp|mono|harmony|patch|lifecycle|concurr|thread|security|authentication|database|schema|protocol|public api|breaking)\b/i;
+interface EffortRoute {
+  reasoningEffort: ReasoningEffort;
+  reason: string;
+}
+
+const BALANCED_MODEL = "gpt-5.6-terra";
+const DEEP_MODEL = "gpt-5.6-luna";
+
+const SOURCE_BACKED = /\b(research|investigat(?:e|ion)|analy[sz]e|implementation(?:-ready)? plan|plan (?:this|the|an?))\b/i;
+const BROAD_SCOPE = /\b(all|every|entire|comprehensive|thorough|exhaustive|repository-wide|repo-wide|codebase-wide|across (?:the )?(?:repository|codebase|modules?))\b/i;
+const REVIEW_REQUEST = /\b(review|audit)\b/i;
+const FOCUSED_QUESTION = /^\s*(?:please\s+)?(?:how|what|why|where|which|can|does|do|is|are)\b/i;
+const FOCUSED_CHANGE = /^\s*(?:please\s+)?(?:add|change|delete|drop|fix|move|remove|rename|replace|restore|revert|update)\b/i;
+
+const DEEP_SIGNALS = [
+  /\b(network|multiplayer|fishnet|rpc|authority|server|client)\b/i,
+  /\b(save|load|persist|migration|reconnect|late[- ]join)\b/i,
+  /\b(lifecycle|state machine)\b/i,
+  /\b(concurr|thread|race condition|deadlock)\b/i,
+  /\b(security|authentication|authorization|permission)\b/i,
+  /\b(database|schema|protocol)\b/i,
+  /\b(public api|breaking change|compatibility contract)\b/i,
+] as const;
+
+const COMPATIBILITY_SIGNALS = [
+  /\b(il2cpp|mono|cross[- ]runtime)\b/i,
+  /\b(harmony|reflection|patch)\b/i,
+  /\b(unity|native wrapper|interop)\b/i,
+] as const;
 
 export function validateOverrides(job: WorkRequest, config: RoutingConfig): string | null {
   if (job.commandError) {
@@ -32,81 +60,108 @@ export function routeExecution(
   config: RoutingConfig,
 ): ExecutionRoute {
   const mode = job.mode;
-  const model = job.requestedModel ?? config.codexModel;
-  if (job.requestedReasoningEffort) {
-    return { mode, model, reasoningEffort: job.requestedReasoningEffort, reason: "explicit mention override" };
-  }
   if (!config.autoReasoningRouting) {
-    return {
-      mode,
-      model,
-      reasoningEffort: config.codexReasoningEffort,
-      reason: "automatic routing disabled",
-    };
+    return completeRoute(mode, config.codexReasoningEffort, "automatic routing disabled", job, config);
   }
 
-  const text = [job.task, issue.title, issue.body ?? "", ...(pullRequest?.files ?? [])].join("\n");
-  const riskMatches = text.match(new RegExp(HIGH_RISK.source, "gi"))?.length ?? 0;
-  const changedLines = pullRequest ? pullRequest.additions + pullRequest.deletions : 0;
-
-  if (mode === "auto") {
-    const complex = riskMatches >= 1 || changedLines >= 600 || text.length > 4_000;
-    return {
-      mode,
-      model,
-      reasoningEffort: complex ? "xhigh" : "high",
-      reason: complex ? "complex agent-directed request" : "agent-directed request",
-    };
+  if (job.requestedReasoningEffort) {
+    return completeRoute(mode, job.requestedReasoningEffort, "explicit mention override", job, config);
   }
 
-  if (mode === "plan") {
-    const complex = text.length > 10_000 || (text.length > 5_000 && riskMatches >= 6);
-    return {
-      mode,
-      model,
-      reasoningEffort: complex ? "max" : "xhigh",
-      reason: complex ? "complex or high-risk issue plan" : "source-backed issue plan",
-    };
-  }
+  const task = job.task.trim();
+  const context = [issue.title, issue.body ?? "", ...(pullRequest?.files ?? [])].join("\n");
+  const taskDepth = countSignals(task, DEEP_SIGNALS);
+  const contextDepth = countSignals(context, DEEP_SIGNALS);
+  const compatibilityDepth = countSignals(context, COMPATIBILITY_SIGNALS);
+  const sourceBacked = SOURCE_BACKED.test(task) || mode === "plan" || mode === "investigate";
+  const broad = BROAD_SCOPE.test(task);
 
-  if (mode === "investigate") {
-    const complex = riskMatches >= 1 || text.length > 1_200;
-    return {
-      mode,
-      model,
-      reasoningEffort: complex ? "xhigh" : "high",
-      reason: complex ? "non-trivial source-backed investigation" : "focused source-backed investigation",
-    };
-  }
-
+  let effort: EffortRoute;
   if (mode === "review" && pullRequest) {
-    if (pullRequest.changedFiles >= 20 || changedLines >= 2_000 || riskMatches >= 8) {
-      return { mode, model, reasoningEffort: "max", reason: "large or high-risk pull request" };
-    }
-    if (pullRequest.changedFiles >= 8 || changedLines >= 600 || riskMatches >= 3) {
-      return { mode, model, reasoningEffort: "xhigh", reason: "non-trivial pull request" };
-    }
-    if (pullRequest.changedFiles <= 3 && changedLines <= 150 && riskMatches === 0) {
-      return { mode, model, reasoningEffort: "medium", reason: "small low-risk pull request" };
-    }
-    return { mode, model, reasoningEffort: "high", reason: "ordinary pull request" };
+    effort = routeReview(pullRequest, contextDepth + compatibilityDepth);
+  } else if (mode === "auto" && pullRequest && REVIEW_REQUEST.test(task)) {
+    effort = routeReview(pullRequest, contextDepth + compatibilityDepth);
+  } else if (isFocusedRequest(task, taskDepth, broad)) {
+    effort = { reasoningEffort: "medium", reason: "bounded request" };
+  } else if (sourceBacked) {
+    effort = routeSourceBacked(task, context, taskDepth, contextDepth, compatibilityDepth, broad);
+  } else if (mode === "implement") {
+    effort = contextDepth >= 3 || taskDepth >= 2 || broad
+      ? { reasoningEffort: "xhigh", reason: "coupled implementation" }
+      : { reasoningEffort: "high", reason: "bounded implementation" };
+  } else if (taskDepth >= 2 || broad || task.length > 1_000) {
+    effort = { reasoningEffort: "xhigh", reason: "multi-surface request" };
+  } else if (taskDepth >= 1 || contextDepth >= 1 || compatibilityDepth >= 1 || task.length > 240) {
+    effort = { reasoningEffort: "high", reason: "source-backed technical request" };
+  } else {
+    effort = { reasoningEffort: "medium", reason: "focused request" };
   }
 
-  if (mode === "implement") {
-    const complex = riskMatches >= 3 || changedLines >= 600 || text.length > 4_000;
-    return {
-      mode,
-      model,
-      reasoningEffort: complex ? "xhigh" : "high",
-      reason: complex ? "non-trivial implementation" : "bounded implementation",
-    };
-  }
+  return completeRoute(mode, effort.reasoningEffort, effort.reason, job, config);
+}
 
-  const needsDepth = riskMatches >= 2 || text.length > 3_000;
+function routeSourceBacked(
+  task: string,
+  context: string,
+  taskDepth: number,
+  contextDepth: number,
+  compatibilityDepth: number,
+  broad: boolean,
+): EffortRoute {
+  if (context.length > 10_000 && contextDepth >= 2) {
+    return { reasoningEffort: "max", reason: "exceptionally broad source-backed request" };
+  }
+  if (task.length > 1_500 || taskDepth >= 2 || contextDepth >= 3 || (broad && contextDepth >= 2)) {
+    return { reasoningEffort: "xhigh", reason: "coupled source-backed request" };
+  }
+  if (contextDepth >= 1 || compatibilityDepth >= 1 || context.length > 1_000) {
+    return { reasoningEffort: "high", reason: "source-backed technical request" };
+  }
+  return { reasoningEffort: "high", reason: "focused source-backed request" };
+}
+
+function routeReview(pullRequest: PullRequestContext, riskSignals: number): EffortRoute {
+  const changedLines = pullRequest.additions + pullRequest.deletions;
+  if (pullRequest.changedFiles >= 20 || changedLines >= 2_000 || riskSignals >= 8) {
+    return { reasoningEffort: "max", reason: "large or high-risk pull request" };
+  }
+  if (pullRequest.changedFiles >= 8 || changedLines >= 600 || riskSignals >= 4) {
+    return { reasoningEffort: "xhigh", reason: "non-trivial pull request" };
+  }
+  if (pullRequest.changedFiles <= 3 && changedLines <= 150 && riskSignals === 0) {
+    return { reasoningEffort: "medium", reason: "small low-risk pull request" };
+  }
+  return { reasoningEffort: "high", reason: "ordinary pull request" };
+}
+
+function isFocusedRequest(task: string, taskDepth: number, broad: boolean): boolean {
+  return task.length <= 240 && taskDepth === 0 && !broad &&
+    (FOCUSED_CHANGE.test(task) || FOCUSED_QUESTION.test(task));
+}
+
+function countSignals(text: string, signals: readonly RegExp[]): number {
+  return signals.reduce((count, signal) => count + Number(signal.test(text)), 0);
+}
+
+function completeRoute(
+  mode: TaskMode,
+  reasoningEffort: ReasoningEffort,
+  reason: string,
+  job: Job,
+  config: RoutingConfig,
+): ExecutionRoute {
   return {
     mode,
-    model,
-    reasoningEffort: needsDepth ? "high" : "medium",
-    reason: needsDepth ? "source-backed technical answer" : "focused answer",
+    model: job.requestedModel ?? automaticModel(reasoningEffort, config),
+    reasoningEffort,
+    reason,
   };
+}
+
+function automaticModel(reasoningEffort: ReasoningEffort, config: RoutingConfig): string {
+  if (!config.autoReasoningRouting) {
+    return config.codexModel;
+  }
+  const preferred = reasoningEffort === "xhigh" || reasoningEffort === "max" ? DEEP_MODEL : BALANCED_MODEL;
+  return config.allowedCodexModels.has(preferred) ? preferred : config.codexModel;
 }

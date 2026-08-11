@@ -5,7 +5,7 @@ import type { Job, PullRequestContext } from "../src/types.js";
 
 const config = {
   codexModel: "gpt-5.6-luna",
-  allowedCodexModels: new Set(["gpt-5.6-luna", "gpt-5.6-terra"]),
+  allowedCodexModels: new Set(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]),
   codexReasoningEffort: "max" as const,
   autoReasoningRouting: true,
 };
@@ -60,7 +60,15 @@ describe("routeExecution", () => {
     const automatic = { ...job, mode: "auto" as const, task: "remove x from this PR" };
     const route = routeExecution(automatic, pullRequest(), pullRequest(), config);
     assert.equal(route.mode, "auto");
-    assert.equal(route.reason, "agent-directed request");
+    assert.equal(route.model, "gpt-5.6-terra");
+    assert.equal(route.reasoningEffort, "medium");
+    assert.equal(route.reason, "bounded request");
+
+    for (const task of ["move x beside the other helper", "How does x work in this PR?"]) {
+      const followUp = routeExecution({ ...automatic, task }, pullRequest(), pullRequest(), config);
+      assert.equal(followUp.model, "gpt-5.6-terra");
+      assert.equal(followUp.reasoningEffort, "medium");
+    }
   });
 
   it("escalates a large review to max", () => {
@@ -68,9 +76,11 @@ describe("routeExecution", () => {
     assert.equal(routeExecution(job, pr, pr, config).reasoningEffort, "max");
   });
 
-  it("routes plans to xhigh and honors explicit overrides", () => {
+  it("routes focused plans to high and honors explicit overrides", () => {
     const planJob = { ...job, kind: "issue" as const, mode: "plan" as const };
-    assert.equal(routeExecution(planJob, { title: "Add a station", body: "Small API" }, null, config).reasoningEffort, "xhigh");
+    const route = routeExecution(planJob, { title: "Add a station", body: "Small API" }, null, config);
+    assert.equal(route.model, "gpt-5.6-terra");
+    assert.equal(route.reasoningEffort, "high");
     assert.equal(
       routeExecution({ ...planJob, requestedReasoningEffort: "high" }, { title: "Add a station", body: null }, null, config).reasoningEffort,
       "high",
@@ -101,7 +111,8 @@ describe("routeExecution", () => {
       config,
     );
     assert.equal(route.mode, "auto");
-    assert.equal(route.reasoningEffort, "xhigh");
+    assert.equal(route.model, "gpt-5.6-terra");
+    assert.equal(route.reasoningEffort, "high");
   });
 
   it("uses the configured fallback when automatic routing is disabled", () => {
@@ -113,5 +124,21 @@ describe("routeExecution", () => {
 
   it("rejects models outside the deployment allowlist", () => {
     assert.match(validateOverrides({ ...job, requestedModel: "unknown" }, config) ?? "", /not allowed/);
+  });
+
+  it("preserves explicit model and effort overrides", () => {
+    const explicit = { ...job, requestedModel: "gpt-5.6-sol", requestedReasoningEffort: "xhigh" as const };
+    const route = routeExecution(explicit, pullRequest(), pullRequest(), config);
+    assert.equal(route.model, "gpt-5.6-sol");
+    assert.equal(route.reasoningEffort, "xhigh");
+  });
+
+  it("uses the configured fallback when the preferred routed model is unavailable", () => {
+    const route = routeExecution(job, pullRequest(), pullRequest(), {
+      ...config,
+      allowedCodexModels: new Set(["custom-deployment-model"]),
+      codexModel: "custom-deployment-model",
+    });
+    assert.equal(route.model, "custom-deployment-model");
   });
 });

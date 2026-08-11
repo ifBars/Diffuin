@@ -53,11 +53,14 @@ Play Mode, Mono runtime, IL2CPP runtime, multiplayer, save/load, or full
 end-to-end validation. Its output separates source/static evidence from the
 manual runtime checks a maintainer still needs to perform.
 
-The default model is `gpt-5.6-luna`. Automatic reasoning routing uses `medium`
-for small low-risk reviews, `high` for ordinary reviews and focused
-investigations, `xhigh` for non-trivial reviews, investigations, and plans, and
-`max` only for unusually large or risky work. Mentions can override both model
-and reasoning within deployment-owned allowlists.
+The fallback model is `gpt-5.6-luna`. Automatic routing uses
+`gpt-5.6-terra` at `medium` or `high` for bounded changes, focused questions,
+ordinary reviews, and source-backed technical work. It reserves
+`gpt-5.6-luna` at `xhigh` or `max` for genuinely coupled work and unusually
+large reviews. The latest request drives the route: a small PR follow-up does
+not inherit the full issue or PR's complexity, while broad reviews still account
+for the complete diff. Mentions can override both model and reasoning within
+deployment-owned allowlists.
 
 ## GitHub App setup
 
@@ -77,6 +80,12 @@ Create a GitHub App with:
 Generate a private key and install the App only on repositories you intend to
 list in `ALLOWED_REPOSITORIES`.
 
+If a repository ruleset applies required checks to `~ALL` branches, exclude
+`refs/heads/diffuin/**` from that rule or grant the Diffuin App a narrowly
+scoped bypass. Otherwise GitHub can accept the initial bot branch but reject
+follow-up commits because the required check cannot run until the new commit is
+first pushed. The target branch and pull-request merge checks remain enforced.
+
 ## Configuration
 
 Copy `.env.example` to `.env`. Required values are:
@@ -88,7 +97,7 @@ Copy `.env.example` to `.env`. Required values are:
 | `GITHUB_PRIVATE_KEY_BASE64` | Hosted alternative to the path; set exactly one private-key option |
 | `GITHUB_WEBHOOK_SECRET` | HMAC secret configured on the App |
 | `ALLOWED_REPOSITORIES` | Comma-separated `owner/repository` allowlist |
-| `CODEX_MODEL` | Default model when a mention does not override it |
+| `CODEX_MODEL` | Fallback model when a routed model is unavailable or automatic routing is disabled |
 | `CODEX_ALLOWED_MODELS` | Comma-separated model allowlist for mention overrides |
 | `CODEX_REASONING_ROUTING` | Enables automatic reasoning selection; defaults to `true` |
 | `CODEX_REASONING_EFFORT` | Fixed fallback used when automatic routing is disabled |
