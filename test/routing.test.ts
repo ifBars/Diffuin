@@ -154,10 +154,28 @@ describe("routeExecution", () => {
     }
   });
 
-  it("uses the Spark provider default for complex quick reviews", () => {
+  it("raises non-trivial quick reviews to high reasoning", () => {
     const sparkConfig = {
       ...config,
       allowedCodexModels: new Set([...config.allowedCodexModels, "gpt-5.3-codex-spark"]),
+    };
+    const complexPullRequest = pullRequest({ changedFiles: 8, additions: 550, deletions: 50 });
+    const route = routeExecution(
+      { ...job, task: "quick review" },
+      complexPullRequest,
+      complexPullRequest,
+      sparkConfig,
+    );
+    assert.equal(route.model, "gpt-5.3-codex-spark");
+    assert.equal(route.reasoningEffort, "high");
+    assert.match(route.reason, /Spark large-review floor/);
+  });
+
+  it("does not lower a configured Spark effort for large quick reviews", () => {
+    const sparkConfig = {
+      ...config,
+      allowedCodexModels: new Set([...config.allowedCodexModels, "gpt-5.3-codex-spark"]),
+      sparkReasoningEffort: "xhigh" as const,
     };
     const complexPullRequest = pullRequest({ changedFiles: 25, additions: 2_000, deletions: 500 });
     const route = routeExecution(
@@ -166,9 +184,7 @@ describe("routeExecution", () => {
       complexPullRequest,
       sparkConfig,
     );
-    assert.equal(route.model, "gpt-5.3-codex-spark");
-    assert.equal(route.reasoningEffort, "medium");
-    assert.match(route.reason, /Spark provider default/);
+    assert.equal(route.reasoningEffort, "xhigh");
   });
 
   it("preserves an explicit Spark reasoning override", () => {

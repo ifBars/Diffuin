@@ -19,6 +19,15 @@ interface EffortRoute {
   reason: string;
 }
 
+const REASONING_RANK: Record<ReasoningEffort, number> = {
+  minimal: 0,
+  low: 1,
+  medium: 2,
+  high: 3,
+  xhigh: 4,
+  max: 5,
+};
+
 const BALANCED_MODEL = "gpt-5.6-terra";
 const DEEP_MODEL = "gpt-5.6-luna";
 
@@ -110,7 +119,11 @@ export function routeExecution(
   }
 
   const reason = speedReviewModel ? `speed-prioritized review; ${effort.reason}` : effort.reason;
-  return completeRoute(mode, effort.reasoningEffort, reason, job, config, speedReviewModel);
+  const speedReviewEffort = speedReviewModel &&
+    (effort.reasoningEffort === "xhigh" || effort.reasoningEffort === "max")
+    ? reasoningAtLeast(config.sparkReasoningEffort, "high")
+    : undefined;
+  return completeRoute(mode, effort.reasoningEffort, reason, job, config, speedReviewModel, speedReviewEffort);
 }
 
 function routeSourceBacked(
@@ -163,12 +176,15 @@ function completeRoute(
   job: Job,
   config: RoutingConfig,
   preferredModel?: string,
+  preferredSparkReasoningEffort?: ReasoningEffort,
 ): ExecutionRoute {
   const model = job.requestedModel ?? preferredModel ?? automaticModel(reasoningEffort, config);
   const useSparkDefault = !job.requestedReasoningEffort && config.sparkModels.has(model);
-  const effectiveReasoningEffort = useSparkDefault ? config.sparkReasoningEffort : reasoningEffort;
+  const effectiveReasoningEffort = useSparkDefault
+    ? preferredSparkReasoningEffort ?? config.sparkReasoningEffort
+    : reasoningEffort;
   const effectiveReason = useSparkDefault && effectiveReasoningEffort !== reasoningEffort
-    ? `${reason}; Spark provider default`
+    ? `${reason}; ${preferredSparkReasoningEffort ? "Spark large-review floor" : "Spark provider default"}`
     : reason;
   return {
     mode,
@@ -180,6 +196,10 @@ function completeRoute(
 
 function configuredSparkModel(config: RoutingConfig): string | undefined {
   return [...config.sparkModels].find((model) => config.allowedCodexModels.has(model));
+}
+
+function reasoningAtLeast(current: ReasoningEffort, floor: ReasoningEffort): ReasoningEffort {
+  return REASONING_RANK[current] >= REASONING_RANK[floor] ? current : floor;
 }
 
 function automaticModel(reasoningEffort: ReasoningEffort, config: RoutingConfig): string {

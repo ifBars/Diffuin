@@ -76,7 +76,8 @@ Provider selection follows the routed model. The `gpt-5.6-*` models run through
 the Codex SDK. Models listed in `SPARK_MODELS` run through the custom Spark
 `automation --stdio` protocol; the default Spark model is
 `gpt-5.3-codex-spark`. Spark defaults to `medium` reasoning for a better
-latency-quality balance; an explicit `--effort` override still wins.
+latency-quality balance. Quick reviews classified as non-trivial or
+large/high-risk use at least `high`; an explicit `--effort` override still wins.
 Pull-request requests such as `quick review`, `fast PR
 review`, `review this quickly`, or `take a quick pass over this` select the
 configured Spark model. An explicit `--model` always wins over that shortcut.
