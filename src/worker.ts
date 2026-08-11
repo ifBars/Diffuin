@@ -109,6 +109,7 @@ export class Worker {
       const rendered = renderArtifact(artifact, route, {
         threadId: result.threadId,
         elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
+        includePlanImplementationAction: job.kind === "issue" && route.mode === "plan",
       });
       assertNoSecrets(rendered.body);
 
@@ -157,7 +158,7 @@ export class Worker {
         head: repository.branch,
         base: targetBranch,
         title: pullRequestTitle(artifact.pullRequestTitle, job.task),
-        body: buildPullRequestBody(job, rendered.body, commitSha, artifact.closesIssue),
+        body: buildPullRequestBody(job, rendered.body, commitSha, artifact.closesIssue || job.closeIssueOnMerge),
       });
       await this.github.addReaction(job, "rocket");
       await this.replaceStatus(job, statusCommentId, `I opened ${created.url}`);

@@ -20,6 +20,7 @@ const job: Job = {
   kind: "pull_request",
   task: "review this for dual-runtime regressions",
   mode: "review",
+  closeIssueOnMerge: false,
 };
 
 const pullRequest: PullRequestContext = {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ExecutionRoute } from "./routing.js";
+import { renderPlanAction } from "./plan-action.js";
 
 const findingSchema = z.object({
   severity: z.enum(["P0", "P1", "P2"]),
@@ -130,7 +131,7 @@ export function parseArtifact(value: string): DiffuinArtifact {
 export function renderArtifact(
   artifact: DiffuinArtifact,
   route: ExecutionRoute,
-  metadata: { threadId: string; elapsedSeconds: number },
+  metadata: { threadId: string; elapsedSeconds: number; includePlanImplementationAction?: boolean },
 ): { body: string; inlineComments: Array<{ path: string; line: number; body: string }> } {
   const inlineComments = artifact.findings
     .filter((finding) => finding.path && finding.line > 0)
@@ -145,7 +146,10 @@ export function renderArtifact(
     : artifact.kind === "review"
       ? renderReview(artifact)
       : renderResponse(artifact, route);
-  return { body: `${content}\n\n${renderMetadata(route, metadata)}\n\n---\n${AI_NOTICE}`, inlineComments };
+  const planAction = artifact.kind === "plan" && metadata.includePlanImplementationAction
+    ? `\n\n${renderPlanAction()}`
+    : "";
+  return { body: `${content}${planAction}\n\n${renderMetadata(route, metadata)}\n\n---\n${AI_NOTICE}`, inlineComments };
 }
 
 export function renderInlineFallback(

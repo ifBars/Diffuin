@@ -21,6 +21,7 @@ const job: Job = {
   kind: "pull_request",
   task: "review this pull request",
   mode: "review",
+  closeIssueOnMerge: false,
   status: "running",
   createdAt: "now",
   updatedAt: "now",
@@ -176,6 +177,7 @@ describe("Worker review delivery", () => {
       ...job,
       kind: "issue",
       mode: "auto",
+      closeIssueOnMerge: true,
       task: "Open a PR against stable to fix the persistence issue.",
     };
     let preparedSource = "";
@@ -221,7 +223,7 @@ describe("Worker review delivery", () => {
             findings: [],
             summary: "Implemented the narrow persistence repair and focused regression coverage.",
             pullRequestTitle: "Fix custom NPC relationship persistence",
-            closesIssue: true,
+            closesIssue: false,
           }),
           threadId: "thread",
         };

@@ -27,6 +27,7 @@ const request: WorkRequest = {
   kind: "issue",
   task: "fix it",
   mode: "implement",
+  closeIssueOnMerge: true,
   requestedModel: "gpt-5.6-terra",
   requestedReasoningEffort: "high",
 };
@@ -44,6 +45,7 @@ describe("JobStore", () => {
     assert.equal(claimed?.mode, "implement");
     assert.equal(claimed?.requestedModel, "gpt-5.6-terra");
     assert.equal(claimed?.requestedReasoningEffort, "high");
+    assert.equal(claimed?.closeIssueOnMerge, true);
     store.finish(claimed!.id, "succeeded");
     assert.equal(store.get(claimed!.id)?.status, "succeeded");
     store.close();
@@ -71,6 +73,7 @@ describe("JobStore", () => {
 
     const store = new JobStore(path);
     assert.equal(store.get("legacy")?.mode, "auto");
+    assert.equal(store.get("legacy")?.closeIssueOnMerge, false);
     store.close();
   });
 });

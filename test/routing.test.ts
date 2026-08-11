@@ -24,6 +24,7 @@ const job = {
   kind: "pull_request",
   task: "review this pull request",
   mode: "review",
+  closeIssueOnMerge: false,
   status: "running",
   createdAt: "now",
   updatedAt: "now",

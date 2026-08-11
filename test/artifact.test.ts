@@ -77,11 +77,13 @@ describe("Diffuin artifacts", () => {
     const rendered = renderArtifact(
       artifact,
       { mode: "plan", model: "gpt-5.6-terra", reasoningEffort: "xhigh", reason: "source-backed issue plan" },
-      { threadId: "thread", elapsedSeconds: 1 },
+      { threadId: "thread", elapsedSeconds: 1, includePlanImplementationAction: true },
     );
 
     assert.match(rendered.body, /<summary>Evidence and validation<\/summary>/);
     assert.match(rendered.body, /### Implementation/);
+    assert.match(rendered.body, /<!-- diffuin:implement-plan -->/);
+    assert.match(rendered.body, /- \[ \] Create a pull request to implement this plan/);
   });
 
   it("does not impose a hard JSON summary boundary that can cut a sentence", () => {

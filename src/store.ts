@@ -20,6 +20,7 @@ interface JobRow {
   task_mode: Job["mode"];
   requested_model: string | null;
   requested_reasoning_effort: Job["requestedReasoningEffort"] | null;
+  close_issue_on_merge: number;
   status: Job["status"];
   created_at: string;
   updated_at: string;
@@ -50,6 +51,7 @@ export class JobStore {
         task_mode TEXT NOT NULL DEFAULT 'auto',
         requested_model TEXT,
         requested_reasoning_effort TEXT,
+        close_issue_on_merge INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed')),
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
@@ -60,6 +62,7 @@ export class JobStore {
     this.ensureColumn("task_mode", "TEXT NOT NULL DEFAULT 'auto'");
     this.ensureColumn("requested_model", "TEXT");
     this.ensureColumn("requested_reasoning_effort", "TEXT");
+    this.ensureColumn("close_issue_on_merge", "INTEGER NOT NULL DEFAULT 0");
   }
 
   enqueue(request: WorkRequest): Job | null {
@@ -69,16 +72,17 @@ export class JobStore {
       INSERT OR IGNORE INTO jobs (
         id, delivery_id, installation_id, repository_id, repository, owner, repo,
         issue_number, comment_id, actor, kind, task, task_mode, requested_model,
-        requested_reasoning_effort, status, created_at, updated_at
+        requested_reasoning_effort, close_issue_on_merge, status, created_at, updated_at
       ) VALUES (
         @id, @deliveryId, @installationId, @repositoryId, @repository, @owner, @repo,
         @issueNumber, @commentId, @actor, @kind, @task, @mode, @requestedModel,
-        @requestedReasoningEffort, @status, @createdAt, @updatedAt
+        @requestedReasoningEffort, @closeIssueOnMerge, @status, @createdAt, @updatedAt
       )
     `).run({
       ...job,
       requestedModel: job.requestedModel ?? null,
       requestedReasoningEffort: job.requestedReasoningEffort ?? null,
+      closeIssueOnMerge: job.closeIssueOnMerge ? 1 : 0,
     });
     return result.changes === 1 ? job : null;
   }
@@ -144,6 +148,7 @@ function mapRow(row: JobRow): Job {
     kind: row.kind,
     task: row.task,
     mode: row.task_mode ?? "auto",
+    closeIssueOnMerge: row.close_issue_on_merge === 1,
     ...(row.requested_model ? { requestedModel: row.requested_model } : {}),
     ...(row.requested_reasoning_effort ? { requestedReasoningEffort: row.requested_reasoning_effort } : {}),
     status: row.status,

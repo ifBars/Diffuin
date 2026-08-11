@@ -23,6 +23,7 @@ export interface WorkRequest {
   kind: TriggerKind;
   task: string;
   mode: TaskMode;
+  closeIssueOnMerge: boolean;
   requestedModel?: string | undefined;
   requestedReasoningEffort?: ReasoningEffort | undefined;
   commandError?: string | undefined;

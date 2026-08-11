@@ -226,6 +226,12 @@ structured sections instead of slicing long Markdown. Every delivered artifact
 ends with an AI-generated accuracy notice and includes collapsed model,
 reasoning, elapsed-time, and Codex-thread metadata.
 
+Issue plans include an unchecked action at the end. A repository maintainer can
+check it to ask Diffuin to implement that exact plan, open a pull request, and
+close the issue when the pull request merges. Each plan comment can trigger at
+most one implementation job; a failed run can still be retried with an explicit
+`@Diffuin implement` mention.
+
 Diffuin includes recent issue or PR conversation in each job. Follow-up
 implementation requests therefore reuse earlier research instead of starting a
 new, potentially contradictory diagnosis. Requests to open, create, raise, or

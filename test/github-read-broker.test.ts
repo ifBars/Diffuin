@@ -18,6 +18,7 @@ const request: WorkRequest = {
   kind: "issue",
   task: "Compare k073l/s1-codearchiver with https://github.com/ifBars/MoreDrugs/issues/12",
   mode: "investigate",
+  closeIssueOnMerge: false,
 };
 
 const context: IssueContext = {
