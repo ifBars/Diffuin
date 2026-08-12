@@ -6,8 +6,39 @@ describe("parseMention", () => {
   it("extracts a task case-insensitively", () => {
     assert.deepEqual(parseMention("@diffuin, please fix the failing test", "Diffuin"), {
       task: "please fix the failing test",
-      mode: "auto",
+      mode: "implement",
     });
+  });
+
+  it("uses the final deliverable in compound natural-language requests", () => {
+    assert.deepEqual(
+      parseMention("@Diffuin Investigate this issue deeply and create a plan to fix it", "Diffuin"),
+      {
+        task: "Investigate this issue deeply and create a plan to fix it",
+        mode: "plan",
+      },
+    );
+    assert.equal(parseMention("@Diffuin review this pull request and fix the regression", "Diffuin")?.mode, "implement");
+  });
+
+  it("keeps explicit option-bearing commands strict", () => {
+    assert.equal(
+      parseMention("@Diffuin investigate -- research whether a plan is needed", "Diffuin")?.mode,
+      "investigate",
+    );
+  });
+
+  it("distinguishes polite requests from questions about an action", () => {
+    assert.equal(parseMention("@Diffuin Could you create a plan for this issue?", "Diffuin")?.mode, "plan");
+    assert.equal(parseMention("@Diffuin Can you fix the null dereference?", "Diffuin")?.mode, "implement");
+    assert.equal(parseMention("@Diffuin How do I fix the null dereference?", "Diffuin")?.mode, "answer");
+    assert.equal(parseMention("@Diffuin Should we create a plan before changing this?", "Diffuin")?.mode, "answer");
+    assert.equal(parseMention("@Diffuin Should we investigate this and fix it?", "Diffuin")?.mode, "answer");
+    assert.equal(parseMention("@Diffuin Why does this fail? Please fix the regression.", "Diffuin")?.mode, "implement");
+  });
+
+  it("leaves ambiguous natural-language requests for semantic interpretation", () => {
+    assert.equal(parseMention("@Diffuin take a look at this", "Diffuin")?.mode, "auto");
   });
 
   it("parses explicit model and effort overrides", () => {

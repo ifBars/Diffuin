@@ -257,10 +257,11 @@ Explicit commands support safe per-request overrides:
 Supported commands are `review`, `investigate`, `plan`, `implement`, and
 `answer`. Use `--` before free-form instructions when options are present.
 Supported reasoning levels are `minimal`, `low`, `medium`, `high`, `xhigh`,
-and `max`. Invalid or
-disallowed overrides are rejected before a job is queued. Free-form mentions
-are passed through for the agent to interpret from their full meaning and PR or
-issue context.
+and `max`. Invalid or disallowed overrides are rejected before a job is queued.
+For free-form mentions, Diffuin resolves clear requested deliverables before the
+run. In compound requests, implementation takes precedence over planning, and
+planning takes precedence over review or investigation. Ambiguous wording is
+left for the agent to interpret from the full request and repository context.
 
 Implementation remains explicit:
 
@@ -286,9 +287,9 @@ most one implementation job; a failed run can still be retried with an explicit
 
 Diffuin includes recent issue or PR conversation in each job. Follow-up
 implementation requests therefore reuse earlier research instead of starting a
-new, potentially contradictory diagnosis. The agent distinguishes questions,
-reviews, plans, investigations, and requested changes from the whole message
-rather than a fixed implementation-verb list.
+new, potentially contradictory diagnosis. Clear natural-language deliverables
+are enforced by the application; the agent interprets only requests that remain
+ambiguous after that classification.
 
 On a pull request created by Diffuin, a direct request such as
 `@Diffuin remove the unused compatibility shim from this PR` commits and pushes
