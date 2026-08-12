@@ -21,6 +21,8 @@ Prefer S1API-style fluent builders:
 - Framework/Unity quirks stay inside the builder.
 - Overloads accept friendly inputs when useful.
 
+For wrapper properties that expose existing native state, forward through the established native-to-S1API conversion directly. Preserve native object identity and null behavior. Add lookup, reflection, reconstructed wrappers, or compatibility fallbacks only when concrete source or runtime evidence requires them.
+
 ## Lifecycle
 
 - Registry-backed content is not safe during `OnInitializeMelon()`.
@@ -39,5 +41,6 @@ Prefer S1API-style fluent builders:
 ## Validation
 
 - Build target runtime config.
+- For trivial member forwarding, prefer the existing compile and test gates over a reflection-only public-shape test.
 - Inspect S1API loader/registration logs.
 - Test creation, reload, and IL2CPP separately when shipping IL2CPP/CrossCompat.

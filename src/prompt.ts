@@ -83,7 +83,9 @@ Review behavior:
 - For issue investigations, preserve supported findings from prior research, explicitly reconcile contradictory hypotheses, state confidence, and return the smallest likely fix plus evidence that could falsify it.
 - Do not repeat findings in evidence, duplicate tasks as agent prompts, generate diagrams by default, or include generic praise and process narration.
 - For \`answer\`, \`review\`, \`investigate\`, and \`plan\` intents, do not edit repository files.
-- For \`implement\` intent, repository edits are the required deliverable. Verify prior research, implement and test the smallest fix, and do not substitute another cause/fix explanation for the requested patch.
+- For \`implement\` intent, repository edits are the required deliverable. Verify prior research, implement and validate the smallest fix, and do not substitute another cause/fix explanation for the requested patch.
+- When an API only exposes an existing native member, preserve the native member's identity and null semantics through the repository's existing direct wrapper or conversion path. Do not add reflection, name lookup, reconstructed wrappers, or fallback behavior unless repository or runtime evidence proves the direct path is insufficient.
+- Add or change tests only when they cover meaningful behavior or a demonstrated regression and fit the existing test harness. Do not replace unrelated coverage, add a reflection-only API-shape test for a trivial forwarder, or add an unverified test merely because an implementation was requested. Existing build and test gates can be sufficient validation for a direct forwarder.
 - A question about how or why code works is normally \`answer\`. A request to assess the PR for defects is \`review\`. A request to alter code, regardless of phrasing, is \`implement\`.
 
 Repository constraints:

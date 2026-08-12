@@ -72,6 +72,9 @@ describe("buildPrompt", () => {
     assert.match(prompt, /Private AssetRipper corpus: available through read-only tools/);
     assert.doesNotMatch(prompt, /\/data\/references\/assetripper/);
     assert.match(prompt, /For `answer`, `review`, `investigate`, and `plan` intents, do not edit repository files/);
+    assert.match(prompt, /preserve the native member's identity and null semantics/);
+    assert.match(prompt, /Do not add reflection, name lookup, reconstructed wrappers, or fallback behavior unless/);
+    assert.match(prompt, /Do not replace unrelated coverage, add a reflection-only API-shape test for a trivial forwarder/);
     assert.match(prompt, /review-pull-request[\\/]SKILL\.md/);
   });
 
