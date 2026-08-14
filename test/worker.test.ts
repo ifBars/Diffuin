@@ -125,8 +125,19 @@ describe("Worker review delivery", () => {
     const store = {
       finish: (_id: string, status: string) => { finished = status; },
     } as unknown as JobStore;
+    let guidanceReference = "";
     const workspaces = {
-      prepare: async () => ({ path: "C:/temp/work", branch: "diffuin/test", remoteUrl: "https://example.test/repo.git" }),
+      prepare: async () => ({
+        path: "C:/temp/work",
+        branch: "diffuin/test",
+        remoteUrl: "https://example.test/repo.git",
+        comparisonReference: "refs/diffuin/base",
+      }),
+      readRepositoryGuidance: async (_path: string, reference: string, token: string) => {
+        guidanceReference = reference;
+        assert.equal(token, "token");
+        return ["Use https://github.com/ifBars/S1API."];
+      },
       hasChanges: async () => false,
       cleanup: async () => undefined,
     } as unknown as GitWorkspace;
@@ -174,6 +185,7 @@ describe("Worker review delivery", () => {
     ).process(job);
 
     assert.equal(finished, "succeeded");
+    assert.equal(guidanceReference, "refs/diffuin/base");
     assert.match(progressComment, /^I'm reviewing this pull request\./);
     assert.equal(inline.length, 1);
     assert.match(updates[0] ?? "", /## Diffuin review/);
@@ -250,6 +262,7 @@ describe("Worker review delivery", () => {
         preparedSource = input.sourceRef;
         return { path: "C:/temp/work", branch: "diffuin/test", remoteUrl: "https://example.test/repo.git" };
       },
+      readRepositoryGuidance: async () => [],
       hasChanges: async () => true,
       readPatch: async () => "diff --git a/file b/file",
       commitAndPush: async () => "commit-sha",
@@ -362,8 +375,14 @@ describe("Worker review delivery", () => {
     const workspaces = {
       prepare: async (input: { sourceRef: string }) => {
         assert.equal(input.sourceRef, "current-head");
-        return { path: "C:/temp/work", branch: "diffuin/12-new", remoteUrl: "https://example.test/repo.git" };
+        return {
+          path: "C:/temp/work",
+          branch: "diffuin/12-new",
+          remoteUrl: "https://example.test/repo.git",
+          comparisonReference: "refs/diffuin/base",
+        };
       },
+      readRepositoryGuidance: async () => [],
       hasChanges: async () => true,
       readPatch: async () => "diff --git a/file b/file",
       commitAndPush: async (_repository: unknown, _token: string, _message: string, targetBranch: string) => {
@@ -446,6 +465,7 @@ describe("Worker review delivery", () => {
     const store = { finish: () => undefined } as unknown as JobStore;
     const workspaces = {
       prepare: async () => ({ path: "C:/temp/work", branch: "diffuin/test", remoteUrl: "https://example.test/repo.git" }),
+      readRepositoryGuidance: async () => [],
       hasChanges: async () => false,
       cleanup: async () => undefined,
     } as unknown as GitWorkspace;

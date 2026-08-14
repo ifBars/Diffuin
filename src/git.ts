@@ -6,6 +6,13 @@ import { sanitizedEnvironment } from "./environment.js";
 
 const execFileAsync = promisify(execFile);
 const MAX_OUTPUT = 10 * 1024 * 1024;
+const MAX_GUIDANCE_FILE_BYTES = 100_000;
+const REPOSITORY_GUIDANCE_PATHS = [
+  "AGENTS.md",
+  "CONTRIBUTING.md",
+  "CONTRIBUTING",
+  ".github/CONTRIBUTING.md",
+] as const;
 
 export interface PreparedRepository {
   path: string;
@@ -63,6 +70,28 @@ export class GitWorkspace {
     return result.stdout.trim().length > 0;
   }
 
+  async readRepositoryGuidance(path: string, reference = "HEAD", token?: string): Promise<string[]> {
+    const documents: string[] = [];
+    const environment = token
+      ? gitAuthEnvironment(token, join(this.root, ".home"))
+      : undefined;
+    for (const guidancePath of REPOSITORY_GUIDANCE_PATHS) {
+      try {
+        const content = (await this.git(
+          ["show", `${reference}:${guidancePath}`],
+          path,
+          environment,
+        )).stdout;
+        if (Buffer.byteLength(content, "utf8") <= MAX_GUIDANCE_FILE_BYTES) {
+          documents.push(content);
+        }
+      } catch (error) {
+        if (!isMissingGitPath(error)) throw error;
+      }
+    }
+    return documents;
+  }
+
   async readPatch(path: string): Promise<string> {
     await makeTreeWritable(join(path, ".git"));
     await this.git(["add", "-N", "--", "."], path);
@@ -109,6 +138,12 @@ export class GitWorkspace {
       throw new Error(`Refusing workspace operation outside ${this.root}`);
     }
   }
+}
+
+function isMissingGitPath(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("stderr" in error)) return false;
+  const stderr = String(error.stderr);
+  return stderr.includes("does not exist in") || stderr.includes("exists on disk, but not in");
 }
 
 function gitAuthEnvironment(token: string, home: string): Record<string, string> {

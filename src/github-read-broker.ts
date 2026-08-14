@@ -58,10 +58,14 @@ export class GitHubReadBroker implements GitHubReadBrokerPort {
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 
-  openSession(request: WorkRequest, context: IssueContext): GitHubReadSession {
+  openSession(
+    request: WorkRequest,
+    context: IssueContext,
+    repositoryGuidance: readonly string[] = [],
+  ): GitHubReadSession {
     if (!this.endpoint) throw new Error("GitHub read broker has not started");
     this.removeExpiredSessions();
-    const repositories = discoverMentionedRepositories(request, context);
+    const repositories = discoverMentionedRepositories(request, context, repositoryGuidance);
     const token = randomBytes(32).toString("base64url");
     this.sessions.set(token, {
       request,
@@ -187,19 +191,30 @@ export class GitHubReadBroker implements GitHubReadBrokerPort {
 
 const repositorySchema = z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/);
 
-export function discoverMentionedRepositories(request: WorkRequest, context: IssueContext): string[] {
+export function discoverMentionedRepositories(
+  request: WorkRequest,
+  context: IssueContext,
+  repositoryGuidance: readonly string[] = [],
+): string[] {
   const repositories = new Map<string, string>();
   addRepository(repositories, request.repository);
   const texts = [request.task, context.body ?? "", ...(context.comments ?? []).map((comment) => comment.body)];
   for (const value of texts) {
-    for (const match of value.matchAll(/https?:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?=[/#?\s)]|$)/gi)) {
-      addRepository(repositories, `${match[1]}/${match[2]!.replace(/\.git$/i, "")}`);
-    }
+    addGitHubLinks(repositories, value);
   }
   for (const match of request.task.matchAll(/(?:^|[\s(`])([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)(?=$|[\s),`])/g)) {
     addRepository(repositories, match[1]!);
   }
+  for (const value of repositoryGuidance) {
+    addGitHubLinks(repositories, value);
+  }
   return [...repositories.values()].slice(0, MAX_REPOSITORIES);
+}
+
+function addGitHubLinks(repositories: Map<string, string>, value: string): void {
+  for (const match of value.matchAll(/https?:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)(?=[/#?\s)]|$)/gi)) {
+    addRepository(repositories, `${match[1]}/${match[2]!.replace(/\.git$/i, "")}`);
+  }
 }
 
 function addRepository(repositories: Map<string, string>, repository: string): void {

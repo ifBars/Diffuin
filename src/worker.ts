@@ -60,7 +60,6 @@ export class Worker {
     try {
       const pullRequest = job.kind === "pull_request" ? await this.github.getPullRequest(job) : null;
       const issue = pullRequest ?? await this.github.getIssue(job);
-      githubReadSession = this.githubReadBroker.openSession(job, issue);
       const baselineRoute = routeExecution(job, issue, pullRequest, this.config);
       const route = await this.advisedRoute(job, issue, pullRequest, baselineRoute);
       statusCommentId = await this.github.comment(
@@ -83,6 +82,13 @@ export class Worker {
         issueNumber: job.issueNumber,
       });
       workspacePath = repository.path;
+      const guidanceReference = repository.comparisonReference ?? "HEAD";
+      const repositoryGuidance = await this.workspaces.readRepositoryGuidance(
+        repository.path,
+        guidanceReference,
+        token,
+      );
+      githubReadSession = this.githubReadBroker.openSession(job, issue, repositoryGuidance);
 
       const references = await this.references.prepare();
       assetRipperReadSession = await this.assetRipperReadBroker.openSession(references.assetRipperPath);

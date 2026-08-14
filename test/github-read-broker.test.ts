@@ -36,6 +36,29 @@ describe("GitHubReadBroker", () => {
     ]);
   });
 
+  it("discovers GitHub links in repository guidance without treating paths as repositories", () => {
+    const repositoryGuidance = [
+      "Use [S1API](https://github.com/ifBars/S1API) and edit surface/s1lua.surface.json.",
+      "See https://github.com/k073l/s1-codearchiver/tree/alternate for game-source evidence.",
+    ];
+    const requestWithoutDependencies = {
+      ...request,
+      repository: "ifBars/S1Lua",
+      owner: "ifBars",
+      repo: "S1Lua",
+      task: "Review this change.",
+    };
+
+    assert.deepEqual(
+      discoverMentionedRepositories(
+        requestWithoutDependencies,
+        { title: "Review", body: null },
+        repositoryGuidance,
+      ),
+      ["ifBars/S1Lua", "ifBars/S1API", "k073l/s1-codearchiver"],
+    );
+  });
+
   it("serves read-only MCP tools and rejects missing or out-of-scope credentials", async () => {
     const calls: string[] = [];
     const source: GitHubReadSource = {

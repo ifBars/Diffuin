@@ -97,7 +97,11 @@ export interface AssetRipperReadBrokerPort {
 }
 
 export interface GitHubReadBrokerPort {
-  openSession(request: WorkRequest, context: IssueContext): GitHubReadSession;
+  openSession(
+    request: WorkRequest,
+    context: IssueContext,
+    repositoryGuidance?: readonly string[],
+  ): GitHubReadSession;
 }
 
 export interface GitHubPort {

@@ -17,6 +17,10 @@ read-only checkouts of the regular and beta stripped-source branches from
 instance may also mount an AssetRipper export read-only. For repositories,
 issues, pull requests, and files explicitly linked in the request or its
 conversation, Diffuin exposes a session-scoped, read-only GitHub tool broker.
+Explicit GitHub repository links in tracked root `AGENTS.md` or contributing
+guidance are included too, so a repository can declare its own read-only source
+dependencies without deployment-level special cases. Pull-request jobs read
+this guidance from the trusted base branch, not the contributor-controlled head.
 
 ## What it does
 
