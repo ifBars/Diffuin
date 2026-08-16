@@ -146,16 +146,17 @@ function isMissingGitPath(error: unknown): boolean {
   return stderr.includes("does not exist in") || stderr.includes("exists on disk, but not in");
 }
 
-function gitAuthEnvironment(token: string, home: string): Record<string, string> {
-  const encoded = Buffer.from(`x-access-token:${token}`).toString("base64");
+export function gitAuthEnvironment(token: string, home: string): Record<string, string> {
   return sanitizedEnvironment({
     HOME: home,
     GIT_CONFIG_NOSYSTEM: "1",
     GIT_CONFIG_GLOBAL: "/dev/null",
     GIT_CONFIG_COUNT: "1",
-    GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
-    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${encoded}`,
+    GIT_CONFIG_KEY_0: "credential.helper",
+    GIT_CONFIG_VALUE_0:
+      "!f() { if [ \"$1\" = get ]; then printf '%s\\n' username=x-access-token \"password=$DIFFUIN_GITHUB_TOKEN\"; fi; }; f",
     GIT_TERMINAL_PROMPT: "0",
+    DIFFUIN_GITHUB_TOKEN: token,
   });
 }
 
