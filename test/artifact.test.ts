@@ -81,7 +81,7 @@ describe("Diffuin artifacts", () => {
     const rendered = renderArtifact(
       artifact,
       { mode: "plan", model: "gpt-5.6-terra", reasoningEffort: "xhigh", reason: "source-backed issue plan" },
-      { threadId: "thread", elapsedSeconds: 1, includePlanImplementationAction: true },
+      { threadId: "thread", elapsedSeconds: 1, includeImplementationAction: true },
     );
 
     assert.match(rendered.body, /<summary>Evidence and validation<\/summary>/);
@@ -108,9 +108,11 @@ describe("Diffuin artifacts", () => {
     const rendered = renderArtifact(
       artifact,
       { mode: "investigate", model: "gpt-5.6-luna", reasoningEffort: "xhigh", reason: "non-trivial source-backed investigation" },
-      { threadId: "thread", elapsedSeconds: 1 },
+      { threadId: "thread", elapsedSeconds: 1, includeImplementationAction: true },
     );
     assert.match(rendered.body, /## Issue investigation/);
     assert.match(rendered.body, /\*\*Confidence:\*\*/);
+    assert.match(rendered.body, /<!-- diffuin:implement-plan -->/);
+    assert.match(rendered.body, /- \[ \] Create a pull request to implement this plan/);
   });
 });

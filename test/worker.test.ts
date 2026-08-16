@@ -502,5 +502,7 @@ describe("Worker review delivery", () => {
     });
     assert.match(finalComment, /^> I polished the issue description/);
     assert.match(finalComment, /## Issue investigation/);
+    assert.match(finalComment, /<!-- diffuin:implement-plan -->/);
+    assert.match(finalComment, /- \[ \] Create a pull request to implement this plan/);
   });
 });

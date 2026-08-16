@@ -127,7 +127,8 @@ export class Worker {
         threadId: result.threadId,
         ...(result.provider ? { provider: result.provider } : {}),
         elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
-        includePlanImplementationAction: job.kind === "issue" && intent === "plan",
+        includeImplementationAction:
+          job.kind === "issue" && (intent === "investigate" || intent === "plan"),
       });
       assertNoSecrets(rendered.body);
 
