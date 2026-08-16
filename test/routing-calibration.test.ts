@@ -46,7 +46,7 @@ const cases: CalibrationCase[] = [
     name: "#215 bounded smoke request",
     task: "Check that the default branch can be read and report what you find.",
     issue: { title: "Diffuin smoke test", body: "Temporary read-only verification." },
-    expectedModel: "gpt-5.6-terra",
+    expectedModel: "gpt-5.6-luna",
     expectedEffort: "medium",
   },
   {
@@ -118,7 +118,7 @@ const cases: CalibrationCase[] = [
       changedFiles: 2,
       files: ["S1API/Internal/Patches/NPCPatches.cs", "S1API.Tests/Entities/NPCScheduleReflectionTests.cs"],
     },
-    expectedModel: "gpt-5.6-terra",
+    expectedModel: "gpt-5.6-luna",
     expectedEffort: "medium",
   },
   {

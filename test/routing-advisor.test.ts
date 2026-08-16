@@ -61,6 +61,8 @@ describe("CodexRoutingAdvisor", () => {
   it("uses a confident allowed route and preserves the mode", async () => {
     const advisor = new CodexRoutingAdvisor(config, async (prompt, outputSchema) => {
       assert.match(prompt, /Do not use tools/);
+      assert.match(prompt, /Prefer Luna with high reasoning over Terra/);
+      assert.match(prompt, /least expensive model.*smallest complete patch/);
       assert.doesNotMatch(prompt, /secret|token/i);
       assert.deepEqual(
         (outputSchema as { properties: { model: { enum: string[] } } }).properties.model.enum,

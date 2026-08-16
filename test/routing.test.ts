@@ -50,7 +50,9 @@ function pullRequest(overrides: Partial<PullRequestContext> = {}): PullRequestCo
 
 describe("routeExecution", () => {
   it("uses medium for a small low-risk review", () => {
-    assert.equal(routeExecution(job, pullRequest(), pullRequest(), config).reasoningEffort, "medium");
+    const route = routeExecution(job, pullRequest(), pullRequest(), config);
+    assert.equal(route.reasoningEffort, "medium");
+    assert.equal(route.model, "gpt-5.6-luna");
   });
 
   it("passes free-form PR review language through for agent interpretation", () => {
@@ -62,13 +64,13 @@ describe("routeExecution", () => {
     const automatic = { ...job, mode: "auto" as const, task: "remove x from this PR" };
     const route = routeExecution(automatic, pullRequest(), pullRequest(), config);
     assert.equal(route.mode, "auto");
-    assert.equal(route.model, "gpt-5.6-terra");
+    assert.equal(route.model, "gpt-5.6-luna");
     assert.equal(route.reasoningEffort, "medium");
     assert.equal(route.reason, "bounded request");
 
     for (const task of ["move x beside the other helper", "How does x work in this PR?"]) {
       const followUp = routeExecution({ ...automatic, task }, pullRequest(), pullRequest(), config);
-      assert.equal(followUp.model, "gpt-5.6-terra");
+      assert.equal(followUp.model, "gpt-5.6-luna");
       assert.equal(followUp.reasoningEffort, "medium");
     }
   });

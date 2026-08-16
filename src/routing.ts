@@ -29,7 +29,12 @@ const REASONING_RANK: Record<ReasoningEffort, number> = {
 };
 
 const BALANCED_MODEL = "gpt-5.6-terra";
-const DEEP_MODEL = "gpt-5.6-luna";
+const LUNA_MODEL = "gpt-5.6-luna";
+const EFFICIENT_REASONS = new Set([
+  "bounded request",
+  "focused request",
+  "small low-risk pull request",
+]);
 
 const SOURCE_BACKED = /\b(research|investigat(?:e|ion)|analy[sz]e|implementation(?:-ready)? plan|plan (?:this|the|an?))\b/i;
 const BROAD_SCOPE = /\b(all|every|entire|comprehensive|thorough|exhaustive|repository-wide|repo-wide|codebase-wide|across (?:the )?(?:repository|codebase|modules?))\b/i;
@@ -178,7 +183,7 @@ function completeRoute(
   preferredModel?: string,
   preferredSparkReasoningEffort?: ReasoningEffort,
 ): ExecutionRoute {
-  const model = job.requestedModel ?? preferredModel ?? automaticModel(reasoningEffort, config);
+  const model = job.requestedModel ?? preferredModel ?? automaticModel(reasoningEffort, reason, config);
   const useSparkDefault = !job.requestedReasoningEffort && config.sparkModels.has(model);
   const effectiveReasoningEffort = useSparkDefault
     ? preferredSparkReasoningEffort ?? config.sparkReasoningEffort
@@ -202,10 +207,13 @@ function reasoningAtLeast(current: ReasoningEffort, floor: ReasoningEffort): Rea
   return REASONING_RANK[current] >= REASONING_RANK[floor] ? current : floor;
 }
 
-function automaticModel(reasoningEffort: ReasoningEffort, config: RoutingConfig): string {
+function automaticModel(reasoningEffort: ReasoningEffort, reason: string, config: RoutingConfig): string {
   if (!config.autoReasoningRouting) {
     return config.codexModel;
   }
-  const preferred = reasoningEffort === "xhigh" || reasoningEffort === "max" ? DEEP_MODEL : BALANCED_MODEL;
+  if (EFFICIENT_REASONS.has(reason) && config.allowedCodexModels.has(LUNA_MODEL)) {
+    return LUNA_MODEL;
+  }
+  const preferred = reasoningEffort === "xhigh" || reasoningEffort === "max" ? LUNA_MODEL : BALANCED_MODEL;
   return config.allowedCodexModels.has(preferred) ? preferred : config.codexModel;
 }
