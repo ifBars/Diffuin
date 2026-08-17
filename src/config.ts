@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
-import type { ReasoningEffort } from "./types.js";
+import type { AgentProfileId, ReasoningEffort } from "./types.js";
 
 const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -25,6 +25,8 @@ const schema = z.object({
   SPARK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60 * 60 * 1000).default(30 * 60 * 1000),
   SPARK_ALLOW_UNSANDBOXED_COMMANDS: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   JOB_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(1000),
+  DIFFUIN_PROFILE: z.enum(["general", "schedule-one"]).default("schedule-one"),
+  SKILL_ROOT: z.string().min(1).default("./skills"),
   SCHEDULE_ONE_SKILL_PATH: z.string().min(1).default("./skills/schedule-one-modding"),
   SCHEDULE_ONE_CODE_ARCHIVER_URL: z.string().url().default("https://github.com/k073l/s1-codearchiver.git"),
   SCHEDULE_ONE_ASSETRIPPER_PATH: z.string().min(1).optional(),
@@ -54,6 +56,8 @@ export interface Config {
   sparkTimeoutMs: number;
   sparkAllowUnsandboxedCommands: boolean;
   jobPollIntervalMs: number;
+  agentProfile: AgentProfileId;
+  skillRoot: string;
   scheduleOneSkillPath: string;
   scheduleOneCodeArchiverUrl: string;
   scheduleOneAssetRipperPath?: string | undefined;
@@ -96,6 +100,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     sparkTimeoutMs: parsed.SPARK_TIMEOUT_MS,
     sparkAllowUnsandboxedCommands: parsed.SPARK_ALLOW_UNSANDBOXED_COMMANDS,
     jobPollIntervalMs: parsed.JOB_POLL_INTERVAL_MS,
+    agentProfile: parsed.DIFFUIN_PROFILE,
+    skillRoot: resolve(parsed.SKILL_ROOT),
     scheduleOneSkillPath: resolve(parsed.SCHEDULE_ONE_SKILL_PATH),
     scheduleOneCodeArchiverUrl: parsed.SCHEDULE_ONE_CODE_ARCHIVER_URL,
     scheduleOneAssetRipperPath: parsed.SCHEDULE_ONE_ASSETRIPPER_PATH

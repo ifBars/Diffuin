@@ -1,4 +1,3 @@
-import { dirname } from "node:path";
 import { artifactOutputSchema, parseArtifact, renderArtifact, renderInlineFallback } from "./artifact.js";
 import type { Config } from "./config.js";
 import { buildPrompt } from "./prompt.js";
@@ -8,6 +7,7 @@ import { assertNoSecrets } from "./secrets.js";
 import type {
   AssetRipperReadBrokerPort,
   AssetRipperReadSession,
+  AgentProfilePort,
   CodexPort,
   GitHubPort,
   GitHubReadBrokerPort,
@@ -18,7 +18,6 @@ import type {
 import { GitWorkspace } from "./git.js";
 import { resolveArtifactIntent } from "./intent.js";
 import { JobStore } from "./store.js";
-import { ScheduleOneReferenceWorkspace } from "./references.js";
 
 export class Worker {
   private stopped = false;
@@ -29,7 +28,7 @@ export class Worker {
     private readonly github: GitHubPort,
     private readonly codex: CodexPort,
     private readonly workspaces: GitWorkspace,
-    private readonly references: ScheduleOneReferenceWorkspace,
+    private readonly profile: AgentProfilePort,
     private readonly githubReadBroker: GitHubReadBrokerPort,
     private readonly assetRipperReadBroker: AssetRipperReadBrokerPort,
     private readonly routingAdvisor?: RoutingAdvisorPort,
@@ -90,15 +89,15 @@ export class Worker {
       );
       githubReadSession = this.githubReadBroker.openSession(job, issue, repositoryGuidance);
 
-      const references = await this.references.prepare();
-      assetRipperReadSession = await this.assetRipperReadBroker.openSession(references.assetRipperPath);
+      const profile = await this.profile.prepare();
+      assetRipperReadSession = await this.assetRipperReadBroker.openSession(profile.assetRipperPath);
       const result = await this.codex.run(
         repository.path,
         buildPrompt(
           job,
           issue,
           pullRequest,
-          references,
+          profile,
           repository.comparisonReference,
           route,
           githubReadSession.repositories,
@@ -107,11 +106,7 @@ export class Worker {
           model: route.model,
           reasoningEffort: route.reasoningEffort,
           outputSchema: artifactOutputSchema,
-          readRoots: [
-            dirname(references.skillPath),
-            references.regularSourcePath,
-            references.betaSourcePath,
-          ].filter((path): path is string => Boolean(path)),
+          readRoots: [...profile.readRoots],
           githubReadSession,
           ...(assetRipperReadSession ? { assetRipperReadSession } : {}),
         },

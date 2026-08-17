@@ -13,7 +13,11 @@ export function createDiffuinServer(config: Config, store: JobStore, github: Git
   return createServer(async (request, response) => {
     try {
       if (request.method === "GET" && request.url === "/health") {
-        return json(response, 200, { status: "ok" });
+        return json(response, 200, {
+          status: "ok",
+          profile: config.agentProfile,
+          connectors: ["github"],
+        });
       }
       if (request.method !== "POST" || request.url !== "/webhooks/github") {
         return json(response, 404, { error: "not_found" });

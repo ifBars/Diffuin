@@ -1,18 +1,21 @@
 # Diffuin
 
-Diffuin is a small, self-hosted GitHub App for Schedule One mod repositories.
-An `@Diffuin` mention asks a configured coding-agent harness to review a pull request against game source,
-refine or plan an issue, answer a focused modding question, or implement an
-explicitly requested change.
+> There are many agents. This one is yours.
 
-This is a personal review bot and project built for my own Schedule One modding
-workflow. It is not designed or supported as a general-purpose product for
-other users, but it is released under the MIT License, so anyone is welcome to
-use, modify, or adapt it for their own workflow.
+Diffuin is a small, self-hosted agent runtime that is growing outward from a
+production GitHub coding bot. Its current connector can review pull requests,
+refine or plan issues, answer focused repository questions, and implement an
+explicitly requested change. The runtime supports a domain-neutral profile as
+well as the original Schedule One profile.
 
-Diffuin combines the target repository's instructions with a bundled,
-public-safe Schedule One modding skill. At job time it refreshes shallow,
-read-only checkouts of the regular and beta stripped-source branches from
+The goal is a compact personal agent gateway: keep the core understandable,
+connect it where you work, and add niche expertise as skills and capability
+packs instead of baking every workflow into the runtime.
+
+With the `schedule-one` profile, Diffuin combines the target repository's
+instructions with a bundled, public-safe Schedule One modding skill. At job
+time it refreshes shallow, read-only checkouts of the regular and beta
+stripped-source branches from
 [S1CodeArchiver](https://github.com/k073l/s1-codearchiver). A local self-hosted
 instance may also mount an AssetRipper export read-only. For repositories,
 issues, pull requests, and files explicitly linked in the request or its
@@ -22,7 +25,7 @@ guidance are included too, so a repository can declare its own read-only source
 dependencies without deployment-level special cases. Pull-request jobs read
 this guidance from the trusted base branch, not the contributor-controlled head.
 
-## What it does
+## Current GitHub connector
 
 1. Verifies the GitHub webhook signature.
 2. Accepts new issue comments and pull-request review comments containing the
@@ -30,8 +33,8 @@ this guidance from the trusted base branch, not the contributor-controlled head.
 3. Requires the repository to be allowlisted and the requesting actor to have
    write-equivalent permission.
 4. Queues the delivery idempotently in SQLite.
-5. Refreshes regular (`alternate`) and beta (`alternate-beta`) game-source
-   references before starting the selected harness.
+5. Prepares the selected agent profile. The Schedule One profile refreshes
+   regular (`alternate`) and beta (`alternate-beta`) game-source references.
 6. Starts a short-lived localhost GitHub read session scoped to the current and
    explicitly mentioned repositories. Public repositories are readable;
    private repositories additionally require the requesting actor to have
@@ -135,12 +138,32 @@ Copy `.env.example` to `.env`. Required values are:
 | `SPARK_REASONING_EFFORT` | Default effort for Spark-routed jobs; defaults to `medium` and explicit mention overrides still win |
 | `SPARK_TIMEOUT_MS` | Per-run Spark subprocess timeout; defaults to 30 minutes |
 | `SPARK_ALLOW_UNSANDBOXED_COMMANDS` | Enables Spark `cmd.exec`; defaults to `false` and requires separate host confinement |
+| `DIFFUIN_PROFILE` | Agent profile: `schedule-one` for the existing modding bot or `general` for domain-neutral repository work |
+| `SKILL_ROOT` | Root containing shared review, implementation, and writing skills; defaults to `./skills` |
 | `SCHEDULE_ONE_SKILL_PATH` | Bundled Schedule One skill directory; defaults to `./skills/schedule-one-modding` |
 | `SCHEDULE_ONE_CODE_ARCHIVER_URL` | Runtime source for regular/beta stripped-code references |
 | `SCHEDULE_ONE_ASSETRIPPER_PATH` | Optional read-only AssetRipper export mount for local/self-hosted use |
 
 `DIFFUIN_HANDLE`, `DATA_DIR`, the Codex routing settings, the Schedule One
 reference settings, and the port have defaults shown in `.env.example`.
+
+## Profiles, skills, and connectors
+
+Profiles define the identity, evidence roots, validation boundaries, and domain
+contract for an agent run. `schedule-one` preserves the existing stripped-source
+and optional AssetRipper workflow. `general` runs the same GitHub, Codex/Spark,
+repository-guidance, and delivery pipeline without loading Schedule One context.
+
+Skills remain ordinary `SKILL.md` directories below `SKILL_ROOT`. Repository-
+specific knowledge should live in tracked `AGENTS.md` or contributing guidance;
+deployment-wide niche behavior belongs in an optional profile or skill pack.
+
+GitHub is the first connector. The connector-neutral direction and the planned
+Discord security/setup contract are documented in
+[docs/architecture.md](docs/architecture.md) and
+[docs/discord-connector.md](docs/discord-connector.md). Discord is intentionally
+not enabled until its identity, allowlist, and repository-action boundaries are
+implemented and the operator supplies a bot application and token.
 
 The GitHub broker binds only to `127.0.0.1`. The selected harness receives a random session
 credential that expires after 30 minutes and is destroyed when the job ends;

@@ -6,6 +6,7 @@ import type { AssetRipperReadBrokerPort, CodexPort, GitHubPort, GitHubReadBroker
 import type { GitWorkspace } from "../src/git.js";
 import type { JobStore } from "../src/store.js";
 import type { ScheduleOneReferenceWorkspace } from "../src/references.js";
+import { ScheduleOneAgentProfile } from "../src/profiles/schedule-one.js";
 
 const job: Job = {
   id: "job",
@@ -169,6 +170,8 @@ describe("Worker review delivery", () => {
       sparkTimeoutMs: 30 * 60 * 1000,
       sparkAllowUnsandboxedCommands: false,
       jobPollIntervalMs: 1000,
+      agentProfile: "schedule-one",
+      skillRoot: "C:/skills",
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/s1-codearchiver.git",
     };
@@ -179,7 +182,7 @@ describe("Worker review delivery", () => {
       github,
       codex,
       workspaces,
-      references,
+      new ScheduleOneAgentProfile(references),
       trackedReadBroker,
       trackedAssetReadBroker,
     ).process(job);
@@ -292,6 +295,8 @@ describe("Worker review delivery", () => {
       sparkTimeoutMs: 30 * 60 * 1000,
       sparkAllowUnsandboxedCommands: false,
       jobPollIntervalMs: 1000,
+      agentProfile: "schedule-one",
+      skillRoot: "C:/skills",
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/s1-codearchiver.git",
     };
@@ -302,7 +307,7 @@ describe("Worker review delivery", () => {
       github,
       codex,
       workspaces,
-      references,
+      new ScheduleOneAgentProfile(references),
       githubReadBroker,
       assetRipperReadBroker,
     ).process(implementationJob);
@@ -403,6 +408,7 @@ describe("Worker review delivery", () => {
       sparkCommand: "spark", sparkModels: new Set(["gpt-5.3-codex-spark"]),
       sparkReasoningEffort: "medium" as const,
       sparkTimeoutMs: 30 * 60 * 1000, sparkAllowUnsandboxedCommands: false,
+      agentProfile: "schedule-one", skillRoot: "C:/skills",
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/archive.git",
     } satisfies Config;
@@ -413,7 +419,7 @@ describe("Worker review delivery", () => {
       github,
       codex,
       workspaces,
-      references,
+      new ScheduleOneAgentProfile(references),
       githubReadBroker,
       assetRipperReadBroker,
     ).process(implementationJob);
@@ -481,6 +487,7 @@ describe("Worker review delivery", () => {
       sparkCommand: "spark", sparkModels: new Set(["gpt-5.3-codex-spark"]),
       sparkReasoningEffort: "medium" as const,
       sparkTimeoutMs: 30 * 60 * 1000, sparkAllowUnsandboxedCommands: false,
+      agentProfile: "schedule-one", skillRoot: "C:/skills",
       scheduleOneSkillPath: "C:/skills/schedule-one-modding",
       scheduleOneCodeArchiverUrl: "https://example.test/archive.git",
     } satisfies Config;
@@ -491,7 +498,7 @@ describe("Worker review delivery", () => {
       github,
       codex,
       workspaces,
-      references,
+      new ScheduleOneAgentProfile(references),
       githubReadBroker,
       assetRipperReadBroker,
     ).process(issueJob);

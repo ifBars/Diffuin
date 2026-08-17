@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildPrompt } from "../src/prompt.js";
+import { buildScheduleOneProfileContext } from "../src/profiles/schedule-one.js";
+import { GeneralAgentProfile } from "../src/profiles/general.js";
 import type { Job, PullRequestContext, ScheduleOneReferences } from "../src/types.js";
 
 const job: Job = {
@@ -43,6 +45,7 @@ const references: ScheduleOneReferences = {
   assetRipperPath: "/data/references/assetripper",
   warnings: [],
 };
+const profile = buildScheduleOneProfileContext(references);
 
 describe("buildPrompt", () => {
   it("frames PR work as source-backed review without runtime claims", () => {
@@ -50,7 +53,7 @@ describe("buildPrompt", () => {
       job,
       pullRequest,
       pullRequest,
-      references,
+      profile,
       "refs/diffuin/base",
       undefined,
       ["ifBars/S1API", "ifBars/MoreDrugs"],
@@ -93,7 +96,10 @@ describe("buildPrompt", () => {
         ],
       },
       null,
-      { skillPath: references.skillPath, warnings: ["Beta game source unavailable: timeout"] },
+      buildScheduleOneProfileContext({
+        skillPath: references.skillPath,
+        warnings: ["Beta game source unavailable: timeout"],
+      }),
     );
 
     assert.match(prompt, /issue #215: Custom station support/);
@@ -112,7 +118,7 @@ describe("buildPrompt", () => {
       autoJob,
       pullRequest,
       pullRequest,
-      references,
+      profile,
       "refs/diffuin/base",
       { mode: "auto", model: "gpt-5.6-luna", reasoningEffort: "high", reason: "agent-directed request" },
     );
@@ -125,5 +131,23 @@ describe("buildPrompt", () => {
     assert.match(prompt, /Always return `intent`/);
     assert.match(prompt, /A question about how or why code works is normally `answer`/);
     assert.match(prompt, /A request to alter code, regardless of phrasing, is `implement`/);
+  });
+
+  it("runs the same repository workflow without Schedule One coupling in the general profile", async () => {
+    const generalProfile = await new GeneralAgentProfile("/app/skills").prepare();
+    const prompt = buildPrompt(
+      { ...job, repository: "octo-org/example", task: "review the authentication boundary" },
+      pullRequest,
+      pullRequest,
+      generalProfile,
+      "refs/diffuin/base",
+    );
+
+    assert.match(prompt, /general-purpose repository agent/);
+    assert.match(prompt, /No deployment-owned domain evidence pack is enabled/);
+    assert.match(prompt, /review-pull-request[\\/]SKILL\.md/);
+    assert.doesNotMatch(prompt, /Schedule One/);
+    assert.doesNotMatch(prompt, /AssetRipper/);
+    assert.doesNotMatch(prompt, /Mono\/IL2CPP/);
   });
 });

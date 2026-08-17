@@ -12,6 +12,8 @@ import { Worker } from "./worker.js";
 import { ScheduleOneReferenceWorkspace } from "./references.js";
 import { SparkClient } from "./spark.js";
 import { CodexRoutingAdvisor } from "./routing-advisor.js";
+import { GeneralAgentProfile } from "./profiles/general.js";
+import { ScheduleOneAgentProfile } from "./profiles/schedule-one.js";
 
 const config = loadConfig();
 const store = new JobStore(join(config.dataDir, "diffuin.sqlite"));
@@ -30,12 +32,14 @@ const codex = new ModelRoutedHarness(
   ),
   config.sparkModels,
 );
-const references = new ScheduleOneReferenceWorkspace(
-  config.dataDir,
-  config.scheduleOneSkillPath,
-  config.scheduleOneCodeArchiverUrl,
-  config.scheduleOneAssetRipperPath,
-);
+const profile = config.agentProfile === "schedule-one"
+  ? new ScheduleOneAgentProfile(new ScheduleOneReferenceWorkspace(
+    config.dataDir,
+    config.scheduleOneSkillPath,
+    config.scheduleOneCodeArchiverUrl,
+    config.scheduleOneAssetRipperPath,
+  ))
+  : new GeneralAgentProfile(config.skillRoot);
 const routingAdvisor = config.routingAdvisorEnabled
   ? new CodexRoutingAdvisor(config)
   : undefined;
@@ -45,7 +49,7 @@ const worker = new Worker(
   github,
   codex,
   new GitWorkspace(config.dataDir),
-  references,
+  profile,
   githubReadBroker,
   assetRipperReadBroker,
   routingAdvisor,

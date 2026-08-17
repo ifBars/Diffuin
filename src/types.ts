@@ -2,6 +2,7 @@ export type TriggerKind = "issue" | "pull_request";
 export type TaskMode = "auto" | "review" | "investigate" | "plan" | "implement" | "answer";
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type HarnessProvider = "codex" | "spark";
+export type AgentProfileId = "general" | "schedule-one";
 
 export interface MentionCommand {
   task: string;
@@ -69,6 +70,23 @@ export interface ScheduleOneReferences {
   betaSourcePath?: string | undefined;
   assetRipperPath?: string | undefined;
   warnings: string[];
+}
+
+export interface AgentProfileContext {
+  id: AgentProfileId;
+  identity: string;
+  primaryJobs: readonly string[];
+  validationBoundary: string;
+  skillRoot: string;
+  domainSkillPath?: string | undefined;
+  evidenceContext: string;
+  behaviorGuidance: string;
+  readRoots: readonly string[];
+  assetRipperPath?: string | undefined;
+}
+
+export interface AgentProfilePort {
+  prepare(): Promise<AgentProfileContext>;
 }
 
 export interface GitHubReadSource {
