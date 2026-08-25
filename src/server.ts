@@ -6,6 +6,7 @@ import { validateOverrides } from "./routing.js";
 import { verifyGitHubSignature } from "./signature.js";
 import { JobStore } from "./store.js";
 import { parseWorkRequest } from "./webhook.js";
+import { parseFeedbackEvent, parseMemoryCommand, parsePullRequestOutcome } from "./learning.js";
 
 const MAX_WEBHOOK_BYTES = 1024 * 1024;
 
@@ -37,7 +38,43 @@ export function createDiffuinServer(config: Config, store: JobStore, github: Git
         return json(response, 200, { status: "pong" });
       }
 
-      const work = parseWorkRequest(eventName, deliveryId, JSON.parse(rawBody.toString("utf8")), config.handle);
+      const payload = JSON.parse(rawBody.toString("utf8"));
+      const outcome = parsePullRequestOutcome(eventName, deliveryId, payload);
+      if (outcome) {
+        if (!config.allowedRepositories.has(outcome.repository.toLowerCase())) {
+          return json(response, 202, { status: "repository_not_allowed" });
+        }
+        const recorded = store.recordPullRequestOutcome(outcome);
+        return json(response, 202, { status: recorded ? "outcome_recorded" : "outcome_ignored" });
+      }
+
+      const feedback = parseFeedbackEvent(eventName, deliveryId, payload);
+      if (feedback) {
+        if (!config.allowedRepositories.has(feedback.repository.toLowerCase())) {
+          return json(response, 202, { status: "repository_not_allowed" });
+        }
+        const permission = await github.getActorPermission(feedback);
+        if (!canWrite(permission)) {
+          return json(response, 202, { status: "actor_not_authorized" });
+        }
+        const recorded = store.recordFeedback(feedback);
+        return json(response, 202, { status: recorded ? "feedback_recorded" : "feedback_ignored" });
+      }
+
+      const memoryCommand = parseMemoryCommand(eventName, deliveryId, payload, config.handle);
+      if (memoryCommand) {
+        if (!config.allowedRepositories.has(memoryCommand.repository.toLowerCase())) {
+          return json(response, 202, { status: "repository_not_allowed" });
+        }
+        const permission = await github.getActorPermission(memoryCommand);
+        if (!canWrite(permission)) {
+          return json(response, 202, { status: "actor_not_authorized" });
+        }
+        await handleMemoryCommand(store, github, memoryCommand);
+        return json(response, 202, { status: "memory_updated" });
+      }
+
+      const work = parseWorkRequest(eventName, deliveryId, payload, config.handle);
       if (!work) {
         return json(response, 202, { status: "ignored" });
       }
@@ -73,6 +110,46 @@ export function createDiffuinServer(config: Config, store: JobStore, github: Git
       return json(response, 500, { error: "internal_error" });
     }
   });
+}
+
+async function handleMemoryCommand(
+  store: JobStore,
+  github: GitHubPort,
+  command: import("./types.js").MemoryCommand,
+): Promise<void> {
+  if (command.memoryAction === "remember") {
+    command.memorySourceSha = await github.getTrustedReferenceSha?.(command);
+    const memory = store.remember(command);
+    await github.addReaction(command, "+1").catch(() => undefined);
+    await github.comment(
+      command,
+      `I saved repository memory \`${memory.id}\` with ${memory.scope} scope. ` +
+      "It will supplement tracked guidance on relevant future runs; it cannot override `AGENTS.md` or safety policy.",
+    );
+    return;
+  }
+  if (command.memoryAction === "forget") {
+    const forgotten = store.forgetMemory(command);
+    await github.comment(
+      command,
+      forgotten
+        ? `I retired memory \`${command.memoryId}\`.`
+        : `I couldn't find an active memory \`${command.memoryId}\` that you can retire in this repository.`,
+    );
+    return;
+  }
+  const memories = store.listMemories(command);
+  const body = memories.length
+    ? memories.map((memory) => {
+      const path = memory.pathGlob ? ` · \`${memory.pathGlob}\`` : "";
+      return `- \`${memory.id}\` · ${memory.kind} · ${memory.scope}${path}\n  ${safeMarkdown(memory.text)}\n  [Evidence](${memory.evidenceUrl})`;
+    }).join("\n")
+    : "No active repository or personal memories are available for this repository.";
+  await github.comment(command, `## Diffuin memory\n\n${body}`);
+}
+
+function safeMarkdown(value: string): string {
+  return value.replace(/@/g, "@\u200b").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function header(request: IncomingMessage, name: string): string | null {

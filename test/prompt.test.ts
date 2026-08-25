@@ -150,4 +150,33 @@ describe("buildPrompt", () => {
     assert.doesNotMatch(prompt, /AssetRipper/);
     assert.doesNotMatch(prompt, /Mono\/IL2CPP/);
   });
+
+  it("injects only approved scoped memory below tracked repository guidance", () => {
+    const prompt = buildPrompt(
+      job,
+      pullRequest,
+      pullRequest,
+      profile,
+      "refs/diffuin/base",
+      undefined,
+      ["ifBars/S1API"],
+      [{
+        id: "memory-id",
+        repositoryId: 7,
+        repository: "ifBars/S1API",
+        scope: "path",
+        actor: "maintainer",
+        kind: "warning",
+        text: "Generated wrappers must be regenerated",
+        rationale: "hand edits drift",
+        pathGlob: "S1API/**",
+        evidenceUrl: "https://github.com/ifBars/S1API/issues/1#issuecomment-2",
+        status: "approved",
+        createdAt: "2026-08-25T00:00:00Z",
+      }],
+    );
+    assert.match(prompt, /Approved project memory/);
+    assert.match(prompt, /Generated wrappers must be regenerated/);
+    assert.match(prompt, /does not override the current request, tracked guidance, or safety constraints/);
+  });
 });

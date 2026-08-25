@@ -72,6 +72,7 @@ describe("Worker review delivery", () => {
     let finished = "";
     let readSessionClosed = false;
     let assetReadSessionClosed = false;
+    let reactionsSynced = false;
     const trackedReadBroker: GitHubReadBrokerPort = {
       openSession: () => ({
         url: "http://127.0.0.1:12345/mcp",
@@ -95,8 +96,12 @@ describe("Worker review delivery", () => {
       addReaction: async () => undefined,
       comment: async (_request, body) => { progressComment = body; return 77; },
       updateComment: async (_request, _commentId, body) => { updates.push(body); },
-      reviewPullRequest: async (_request, _body, comments) => { inline.push(...comments); },
+      reviewPullRequest: async (_request, _body, comments) => { inline.push(...comments); return [501]; },
       getDefaultBranch: async () => "beta",
+      listReviewCommentReactions: async (_request, commentId) => {
+        assert.equal(commentId, 400);
+        return [{ actor: "maintainer", signal: "positive" }];
+      },
       getIssue: async () => ({ title: "unused", body: null }),
       getPullRequest: async () => ({
         title: "Small fix",
@@ -125,6 +130,12 @@ describe("Worker review delivery", () => {
     };
     const store = {
       finish: (_id: string, status: string) => { finished = status; },
+      findingsForFeedbackSync: () => [400],
+      replaceFindingReactions: (commentId: number, reactions: unknown[]) => {
+        assert.equal(commentId, 400);
+        assert.equal(reactions.length, 1);
+        reactionsSynced = true;
+      },
     } as unknown as JobStore;
     let guidanceReference = "";
     const workspaces = {
@@ -139,6 +150,7 @@ describe("Worker review delivery", () => {
         assert.equal(token, "token");
         return ["Use https://github.com/ifBars/S1API."];
       },
+      currentRevision: async () => "abc",
       hasChanges: async () => false,
       cleanup: async () => undefined,
     } as unknown as GitWorkspace;
@@ -196,6 +208,7 @@ describe("Worker review delivery", () => {
     assert.doesNotMatch(updates[0] ?? "", /truncated/);
     assert.equal(readSessionClosed, true);
     assert.equal(assetReadSessionClosed, true);
+    assert.equal(reactionsSynced, true);
   });
 
   it("turns an open-PR issue follow-up into a patch against the requested branch", async () => {
@@ -217,7 +230,7 @@ describe("Worker review delivery", () => {
       addReaction: async () => undefined,
       comment: async () => 88,
       updateComment: async (_request, _commentId, body) => { updates.push(body); },
-      reviewPullRequest: async () => undefined,
+      reviewPullRequest: async () => [],
       getDefaultBranch: async () => "beta",
       getIssue: async () => ({
         title: "Relationship persistence bug",
@@ -266,6 +279,7 @@ describe("Worker review delivery", () => {
         return { path: "C:/temp/work", branch: "diffuin/test", remoteUrl: "https://example.test/repo.git" };
       },
       readRepositoryGuidance: async () => [],
+      currentRevision: async () => "issue-head",
       hasChanges: async () => true,
       readPatch: async () => "diff --git a/file b/file",
       commitAndPush: async () => "commit-sha",
@@ -335,7 +349,7 @@ describe("Worker review delivery", () => {
       addReaction: async () => undefined,
       comment: async () => 91,
       updateComment: async (_request, _commentId, body) => { finalComment = body; },
-      reviewPullRequest: async () => undefined,
+      reviewPullRequest: async () => [],
       getDefaultBranch: async () => "stable",
       getIssue: async () => ({ title: "unused", body: null }),
       getPullRequest: async () => ({
@@ -388,6 +402,7 @@ describe("Worker review delivery", () => {
         };
       },
       readRepositoryGuidance: async () => [],
+      currentRevision: async () => "current-head",
       hasChanges: async () => true,
       readPatch: async () => "diff --git a/file b/file",
       commitAndPush: async (_repository: unknown, _token: string, _message: string, targetBranch: string) => {
@@ -440,7 +455,7 @@ describe("Worker review delivery", () => {
       addReaction: async () => undefined,
       comment: async () => 90,
       updateComment: async (_request, _commentId, body) => { finalComment = body; },
-      reviewPullRequest: async () => undefined,
+      reviewPullRequest: async () => [],
       getDefaultBranch: async () => "stable",
       getIssue: async () => ({ title: "npc broken", body: "npc walks inside" }),
       getPullRequest: async () => { throw new Error("not a pull request"); },
@@ -472,6 +487,7 @@ describe("Worker review delivery", () => {
     const workspaces = {
       prepare: async () => ({ path: "C:/temp/work", branch: "diffuin/test", remoteUrl: "https://example.test/repo.git" }),
       readRepositoryGuidance: async () => [],
+      currentRevision: async () => "issue-head",
       hasChanges: async () => false,
       cleanup: async () => undefined,
     } as unknown as GitWorkspace;

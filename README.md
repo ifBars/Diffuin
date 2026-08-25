@@ -105,6 +105,7 @@ Create a GitHub App with:
 - Subscribe to events:
   - Issue comment
   - Pull request review comment
+  - Pull request
 
 Generate a private key and install the App only on repositories you intend to
 list in `ALLOWED_REPOSITORIES`.
@@ -157,6 +158,65 @@ repository-guidance, and delivery pipeline without loading Schedule One context.
 Skills remain ordinary `SKILL.md` directories below `SKILL_ROOT`. Repository-
 specific knowledge should live in tracked `AGENTS.md` or contributing guidance;
 deployment-wide niche behavior belongs in an optional profile or skill pack.
+
+## Repository memory and onboarding
+
+Diffuin combines tracked repository guidance with a bounded, inspectable memory
+store. Tracked `AGENTS.md` remains the durable project contract. Approved memory
+supplements that contract with provenance and scope; it cannot override the
+current authorized request, tracked guidance, or application safety policy.
+
+Only write-equivalent repository actors can create shared memory. Personal
+memory is visible only in that actor's non-review runs, so one maintainer's
+preferences do not silently govern reviews requested by everyone else. Path
+memory is retrieved only when a changed file matches its scope.
+
+```text
+@Diffuin remember warning for this repository: Generated clients must be regenerated because handwritten edits drift
+@Diffuin remember for src/api/**: run the API contract suite
+@Diffuin remember for me: keep implementation summaries terse
+@Diffuin what have you learned?
+@Diffuin forget 00000000-0000-0000-0000-000000000000
+```
+
+Every stored memory retains the author, evidence comment, creation time, and the
+trusted base/default-branch SHA available when it was recorded. Diffuin includes
+applicable memories in the run with lower precedence than repository guidance.
+If the checkout contradicts a remembered fact, the checkout wins and the agent
+must report the stale memory.
+
+Repository onboarding is an ordinary explicit implementation request:
+
+```text
+@Diffuin onboard this repository
+@Diffuin audit our AGENTS.md
+@Diffuin promote approved lessons into AGENTS.md
+```
+
+These requests create a normal reviewable patch. Diffuin is instructed to keep
+guidance repository-specific and concise, and to add nested `AGENTS.md` files
+only when subprojects materially differ.
+
+Diffuin persists structured artifacts, delivered inline-comment identifiers,
+authorized review-thread feedback, and merged/closed outcomes for its own pull
+requests. It refreshes write-authorized thumbs-up/down reactions through the
+GitHub REST API during later jobs in the same repository because GitHub does not
+provide a review-comment reaction webhook. These records are evaluation signals
+rather than automatically promoted rules. Subscribe the GitHub App to `Pull
+request` events to collect merge/close outcomes. Existing deployments continue
+to work without that event, but will not accumulate the corresponding outcome
+evidence.
+
+Operators can export attributable run, finding, feedback, and outcome records
+into deterministic train/validation/holdout partitions for offline evaluation:
+
+```sh
+bun run learning:export -- /data/diffuin.sqlite ./artifacts/learning-eval.jsonl
+```
+
+The export can contain repository text and maintainer feedback. Keep it private,
+review proposed prompt or skill changes against the holdout partition, and deploy
+those changes only through the normal reviewed Git workflow.
 
 GitHub is the first connector. The connector-neutral direction and the planned
 Discord security/setup contract are documented in

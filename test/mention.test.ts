@@ -41,6 +41,12 @@ describe("parseMention", () => {
     assert.equal(parseMention("@Diffuin take a look at this", "Diffuin")?.mode, "auto");
   });
 
+  it("treats repository onboarding and AGENTS.md maintenance as implementation", () => {
+    assert.equal(parseMention("@Diffuin onboard this repository", "Diffuin")?.mode, "implement");
+    assert.equal(parseMention("@Diffuin audit our AGENTS.md", "Diffuin")?.mode, "implement");
+    assert.equal(parseMention("@Diffuin promote approved lessons into AGENTS.md", "Diffuin")?.mode, "implement");
+  });
+
   it("parses explicit model and effort overrides", () => {
     assert.deepEqual(
       parseMention(

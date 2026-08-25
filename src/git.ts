@@ -70,6 +70,10 @@ export class GitWorkspace {
     return result.stdout.trim().length > 0;
   }
 
+  async currentRevision(path: string): Promise<string> {
+    return (await this.git(["rev-parse", "HEAD"], path)).stdout.trim();
+  }
+
   async readRepositoryGuidance(path: string, reference = "HEAD", token?: string): Promise<string[]> {
     const documents: string[] = [];
     const environment = token

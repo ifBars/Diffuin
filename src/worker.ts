@@ -59,6 +59,7 @@ export class Worker {
     try {
       const pullRequest = job.kind === "pull_request" ? await this.github.getPullRequest(job) : null;
       const issue = pullRequest ?? await this.github.getIssue(job);
+      await this.syncFindingFeedback(job);
       const baselineRoute = routeExecution(job, issue, pullRequest, this.config);
       const route = await this.advisedRoute(job, issue, pullRequest, baselineRoute);
       statusCommentId = await this.github.comment(
@@ -81,6 +82,7 @@ export class Worker {
         issueNumber: job.issueNumber,
       });
       workspacePath = repository.path;
+      const sourceSha = await this.workspaces.currentRevision(repository.path);
       const guidanceReference = repository.comparisonReference ?? "HEAD";
       const repositoryGuidance = await this.workspaces.readRepositoryGuidance(
         repository.path,
@@ -90,6 +92,11 @@ export class Worker {
       githubReadSession = this.githubReadBroker.openSession(job, issue, repositoryGuidance);
 
       const profile = await this.profile.prepare();
+      const projectMemories = this.store.listApplicableMemories?.(
+        job,
+        pullRequest?.files ?? [],
+        route.mode !== "review",
+      ) ?? [];
       assetRipperReadSession = await this.assetRipperReadBroker.openSession(profile.assetRipperPath);
       const result = await this.codex.run(
         repository.path,
@@ -101,6 +108,7 @@ export class Worker {
           repository.comparisonReference,
           route,
           githubReadSession.repositories,
+          projectMemories,
         ),
         {
           model: route.model,
@@ -113,6 +121,13 @@ export class Worker {
       );
       assertNoSecrets(result.finalResponse);
       const artifact = parseArtifact(result.finalResponse);
+      this.store.saveArtifact?.(job, artifact, sourceSha, statusCommentId, {
+        provider: result.provider ?? "codex",
+        model: route.model,
+        reasoningEffort: route.reasoningEffort,
+        profileId: profile.id,
+        threadId: result.threadId,
+      });
       const intent = resolveArtifactIntent(job.kind, route.mode, artifact);
       const expectedKind = intent === "review" ? "review" : intent === "plan" ? "plan" : "response";
       if (artifact.kind !== expectedKind) {
@@ -147,7 +162,8 @@ export class Worker {
         let body = `${issueUpdateNotice}${rendered.body}`;
         if (job.kind === "pull_request" && intent === "review" && rendered.inlineComments.length) {
           try {
-            await this.github.reviewPullRequest(job, "", rendered.inlineComments);
+            const externalCommentIds = await this.github.reviewPullRequest(job, "", rendered.inlineComments);
+            this.store.recordDeliveredFindings?.(job.id, artifact, externalCommentIds);
           } catch {
             body += renderInlineFallback(rendered.inlineComments);
           }
@@ -222,6 +238,20 @@ export class Worker {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`Routing advisor failed; using deterministic route: ${message.slice(0, 500)}`);
       return baseline;
+    }
+  }
+
+  private async syncFindingFeedback(job: Job): Promise<void> {
+    if (!this.github.listReviewCommentReactions) return;
+    const commentIds = this.store.findingsForFeedbackSync?.(job.repositoryId) ?? [];
+    for (const commentId of commentIds) {
+      try {
+        const reactions = await this.github.listReviewCommentReactions(job, commentId);
+        this.store.replaceFindingReactions?.(commentId, reactions);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`Could not refresh reactions for review comment ${commentId}: ${message.slice(0, 300)}`);
+      }
     }
   }
 

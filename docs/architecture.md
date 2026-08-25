@@ -8,9 +8,23 @@ extracting reusable seams in place.
 
 The core owns run orchestration, model routing, structured artifacts, safety
 checks, and durable job state. Connectors own platform ingress, identity,
-authorization, conversation context, and delivery. Profiles own deployment-wide
+  authorization, conversation context, feedback events, and delivery. Profiles own deployment-wide
 identity, evidence providers, validation limits, and the domain skill contract.
 Repository guidance owns repository-specific behavior.
+
+The learning layer is deliberately split between two forms of state:
+
+- tracked `AGENTS.md` is promoted, versioned, repository-owned policy;
+- SQLite memory and outcome records are scoped, attributable evidence used for
+  retrieval and offline evaluation.
+
+Shared memory requires the same write-equivalent authorization as work requests.
+Review-thread replies are ingested immediately, while write-authorized thumbs
+reactions are refreshed through the REST API during later repository jobs because
+GitHub exposes no review-comment reaction webhook. Feedback is recorded only when
+it targets a finding that Diffuin persisted at delivery time. Pull-request outcomes are recorded only when the PR
+body contains a known Diffuin job identifier. Neither signal changes policy on
+its own.
 
 ```text
 connector event
@@ -20,6 +34,7 @@ connector event
   -> Codex or Spark harness
   -> structured artifact and proposed actions
   -> connector delivery
+  -> attributable feedback and outcome evidence
 ```
 
 ## Current milestone

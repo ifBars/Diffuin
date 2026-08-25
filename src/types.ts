@@ -3,6 +3,8 @@ export type TaskMode = "auto" | "review" | "investigate" | "plan" | "implement" 
 export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type HarnessProvider = "codex" | "spark";
 export type AgentProfileId = "general" | "schedule-one";
+export type MemoryScope = "repository" | "path" | "user";
+export type MemoryKind = "fact" | "preference" | "precedent" | "warning";
 
 export interface MentionCommand {
   task: string;
@@ -51,6 +53,42 @@ export interface IssueCommentContext {
   id: number;
   author: string;
   body: string;
+}
+
+export interface ProjectMemory {
+  id: string;
+  repositoryId: number;
+  repository: string;
+  scope: MemoryScope;
+  actor: string;
+  kind: MemoryKind;
+  text: string;
+  rationale?: string | undefined;
+  pathGlob?: string | undefined;
+  evidenceUrl: string;
+  sourceSha?: string | undefined;
+  status: "approved" | "rejected" | "stale" | "promoted";
+  createdAt: string;
+  lastVerifiedAt?: string | undefined;
+}
+
+export interface MemoryCommand extends WorkRequest {
+  memoryAction: "remember" | "forget" | "list";
+  memoryScope?: MemoryScope | undefined;
+  memoryKind?: MemoryKind | undefined;
+  memoryText?: string | undefined;
+  memoryRationale?: string | undefined;
+  memoryPathGlob?: string | undefined;
+  memorySourceSha?: string | undefined;
+  memoryId?: string | undefined;
+  evidenceUrl: string;
+}
+
+export interface FeedbackEvent extends WorkRequest {
+  externalCommentId: number;
+  signal: "positive" | "negative";
+  operation: "add" | "remove";
+  body?: string | undefined;
 }
 
 export interface PullRequestContext extends IssueContext {
@@ -131,8 +169,13 @@ export interface GitHubPort {
     request: WorkRequest,
     body: string,
     comments: Array<{ path: string; line: number; body: string }>,
-  ): Promise<void>;
+  ): Promise<number[]>;
   getDefaultBranch(request: WorkRequest): Promise<string>;
+  getTrustedReferenceSha?(request: WorkRequest): Promise<string>;
+  listReviewCommentReactions?(
+    request: WorkRequest,
+    commentId: number,
+  ): Promise<Array<{ actor: string; signal: "positive" | "negative" }>>;
   getIssue(request: WorkRequest): Promise<IssueContext>;
   getPullRequest(request: WorkRequest): Promise<PullRequestContext>;
   updateIssue(request: WorkRequest, input: { title: string; body: string }): Promise<void>;

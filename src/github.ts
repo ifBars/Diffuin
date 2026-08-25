@@ -1,4 +1,5 @@
 import { App, Octokit } from "octokit";
+import { canWrite } from "./mention.js";
 import type {
   GitHubPort,
   GitHubReadSource,
@@ -65,9 +66,9 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
     request: WorkRequest,
     body: string,
     comments: Array<{ path: string; line: number; body: string }>,
-  ): Promise<void> {
+  ): Promise<number[]> {
     const octokit = await this.installation(request);
-    await octokit.rest.pulls.createReview({
+    const response = await octokit.rest.pulls.createReview({
       owner: request.owner,
       repo: request.repo,
       pull_number: request.issueNumber,
@@ -75,12 +76,70 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
       body,
       comments: comments.map((comment) => ({ ...comment, side: "RIGHT" as const })),
     });
+    const delivered = await octokit.paginate(octokit.rest.pulls.listCommentsForReview, {
+      owner: request.owner,
+      repo: request.repo,
+      pull_number: request.issueNumber,
+      review_id: response.data.id,
+      per_page: 100,
+    });
+    return delivered.map((comment) => comment.id);
   }
 
   async getDefaultBranch(request: WorkRequest): Promise<string> {
     const octokit = await this.installation(request);
     const response = await octokit.rest.repos.get({ owner: request.owner, repo: request.repo });
     return response.data.default_branch;
+  }
+
+  async getTrustedReferenceSha(request: WorkRequest): Promise<string> {
+    const octokit = await this.installation(request);
+    if (request.kind === "pull_request") {
+      const response = await octokit.rest.pulls.get({
+        owner: request.owner,
+        repo: request.repo,
+        pull_number: request.issueNumber,
+      });
+      return response.data.base.sha;
+    }
+    const repository = await octokit.rest.repos.get({ owner: request.owner, repo: request.repo });
+    const branch = await octokit.rest.repos.getBranch({
+      owner: request.owner,
+      repo: request.repo,
+      branch: repository.data.default_branch,
+    });
+    return branch.data.commit.sha;
+  }
+
+  async listReviewCommentReactions(
+    request: WorkRequest,
+    commentId: number,
+  ): Promise<Array<{ actor: string; signal: "positive" | "negative" }>> {
+    const octokit = await this.installation(request);
+    const reactions = await octokit.paginate(octokit.rest.reactions.listForPullRequestReviewComment, {
+      owner: request.owner,
+      repo: request.repo,
+      comment_id: commentId,
+      per_page: 100,
+    });
+    const candidates = reactions.flatMap((reaction) => {
+      const actor = reaction.user?.login;
+      if (!actor || (reaction.content !== "+1" && reaction.content !== "-1")) return [];
+      return [{ actor, signal: reaction.content === "+1" ? "positive" as const : "negative" as const }];
+    });
+    const authorized = await Promise.all(candidates.map(async (reaction) => {
+      try {
+        const permission = await octokit.rest.repos.getCollaboratorPermissionLevel({
+          owner: request.owner,
+          repo: request.repo,
+          username: reaction.actor,
+        });
+        return canWrite(permission.data.permission) ? reaction : null;
+      } catch {
+        return null;
+      }
+    }));
+    return authorized.filter((reaction): reaction is (typeof candidates)[number] => reaction !== null);
   }
 
   async getIssue(request: WorkRequest): Promise<IssueContext> {
