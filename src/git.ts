@@ -46,7 +46,8 @@ export class GitWorkspace {
     const branch = `diffuin/${input.issueNumber}-${input.jobId.slice(0, 8)}`;
     const auth = gitAuthEnvironment(input.token, isolatedHome);
 
-    await this.git(["clone", "--no-checkout", "--filter=blob:none", remoteUrl, path], dirname(path), auth);
+    // Guidance and review diffs must not need lazy blob fetches after .git is read-only.
+    await this.git(["clone", "--no-checkout", remoteUrl, path], dirname(path), auth);
     await this.git(["fetch", "--no-tags", "origin", input.sourceRef], path, auth);
     await this.git(["checkout", "-b", branch, "FETCH_HEAD"], path);
     let comparisonReference: string | undefined;
