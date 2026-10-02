@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { Config } from "./config.js";
 import { sanitizedEnvironment } from "./environment.js";
-import type { ExecutionRoute } from "./routing.js";
+import { HARDEST_MODEL, type ExecutionRoute } from "./routing.js";
 import type { IssueContext, Job, PullRequestContext, ReasoningEffort } from "./types.js";
 
 const ADVISOR_REASONING_EFFORT = "medium" as const;
@@ -75,7 +75,8 @@ export class CodexRoutingAdvisor implements RoutingAdvisorPort {
       return null;
     }
 
-    const allowedModels = [...this.config.allowedCodexModels].sort();
+    // The hardest routes bypass the advisor; middle cases cannot escalate to Astra.
+    const allowedModels = [...this.config.allowedCodexModels].filter((model) => model !== HARDEST_MODEL).sort();
     const response = await this.runner(
       buildAdvisorPrompt(job, issue, pullRequest, baseline, allowedModels),
       routingAdviceOutputSchema(allowedModels),
@@ -84,7 +85,7 @@ export class CodexRoutingAdvisor implements RoutingAdvisorPort {
     if (advice.confidence === "low") {
       return null;
     }
-    if (!this.config.allowedCodexModels.has(advice.model)) {
+    if (!allowedModels.includes(advice.model)) {
       throw new Error(`routing advisor selected disallowed model ${advice.model}`);
     }
 
@@ -187,9 +188,9 @@ function buildAdvisorPrompt(
     "Return exactly the requested JSON schema.",
     "Guidelines:",
     "- gpt-5.3-codex-spark is the fast route and uses medium reasoning; choose it only when speed matters and the task is bounded.",
-    "- gpt-5.6-luna is the default for small, focused, low-risk changes and reviews. Prefer Luna with high reasoning over Terra when Luna can produce the same correct result.",
-    "- gpt-5.6-terra is for work with concrete complexity that exceeds a focused Luna task, such as several interacting code paths or material ambiguity.",
-    "- gpt-5.6-sol is the frontier choice for unusually difficult or high-risk work.",
+    "- gpt-6-luna is the default for small, focused, low-risk changes and reviews. Prefer Luna with high reasoning over Sol when Luna can produce the same correct result.",
+    "- gpt-6.1-sol is for substantial work with concrete complexity beyond a focused Luna task, such as interacting code paths or material ambiguity.",
+    "- gpt-6-astra is reserved exclusively for the hardest tasks. Those routes bypass this advisor; Astra is unavailable for these middle cases.",
     "- Medium is the default balance. Choose high or above only when complexity or risk justifies the latency.",
     "- A request for tests, Mono/IL2CPP checks, or careful validation does not by itself make a small code change complex.",
     "- Prefer the least expensive model that can confidently deliver the smallest complete patch. Do not escalate for polish, optional abstractions, or speculative edge cases.",

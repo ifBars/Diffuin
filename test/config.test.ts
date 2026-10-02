@@ -10,6 +10,15 @@ const baseEnvironment: NodeJS.ProcessEnv = {
 };
 
 describe("loadConfig profiles", () => {
+  it("defaults to the current model tiers and a Luna routing advisor", () => {
+    const config = loadConfig(baseEnvironment);
+    assert.equal(config.codexModel, "gpt-6-luna");
+    assert.equal(config.routingAdvisorModel, "gpt-6-luna");
+    assert.deepEqual([...config.allowedCodexModels], [
+      "gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra", "gpt-5.3-codex-spark",
+    ]);
+  });
+
   it("preserves the Schedule One profile for existing deployments", () => {
     const config = loadConfig(baseEnvironment);
 

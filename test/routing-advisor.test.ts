@@ -6,9 +6,9 @@ import type { ExecutionRoute } from "../src/routing.js";
 import type { IssueContext, Job, PullRequestContext } from "../src/types.js";
 
 const config = {
-  allowedCodexModels: new Set(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.3-codex-spark"]),
+  allowedCodexModels: new Set(["gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra", "gpt-5.3-codex-spark"]),
   dataDir: "C:/data",
-  routingAdvisorModel: "gpt-5.6-luna",
+  routingAdvisorModel: "gpt-6-luna",
   routingAdvisorTimeoutMs: 30_000,
   sparkModels: new Set(["gpt-5.3-codex-spark"]),
   sparkReasoningEffort: "medium" as const,
@@ -52,7 +52,7 @@ const pullRequest: PullRequestContext = {
 };
 const baseline: ExecutionRoute = {
   mode: "review",
-  model: "gpt-5.6-terra",
+  model: "gpt-6.1-sol",
   reasoningEffort: "high",
   reason: "ordinary pull request",
 };
@@ -61,15 +61,15 @@ describe("CodexRoutingAdvisor", () => {
   it("uses a confident allowed route and preserves the mode", async () => {
     const advisor = new CodexRoutingAdvisor(config, async (prompt, outputSchema) => {
       assert.match(prompt, /Do not use tools/);
-      assert.match(prompt, /Prefer Luna with high reasoning over Terra/);
+      assert.match(prompt, /Prefer Luna with high reasoning over Sol/);
       assert.match(prompt, /least expensive model.*smallest complete patch/);
       assert.doesNotMatch(prompt, /secret|token/i);
       assert.deepEqual(
         (outputSchema as { properties: { model: { enum: string[] } } }).properties.model.enum,
-        [...config.allowedCodexModels].sort(),
+        [...config.allowedCodexModels].filter((model) => model !== "gpt-6-astra").sort(),
       );
       return JSON.stringify({
-        model: "gpt-5.6-terra",
+        model: "gpt-6.1-sol",
         reasoningEffort: "high",
         confidence: "high",
         reasonCode: "risk",
@@ -79,7 +79,7 @@ describe("CodexRoutingAdvisor", () => {
     const route = await advisor.advise(job, issue, pullRequest, baseline);
     assert.deepEqual(route, {
       mode: "review",
-      model: "gpt-5.6-terra",
+      model: "gpt-6.1-sol",
       reasoningEffort: "high",
       reason: "Luna advisor: risk (high); baseline ordinary pull request",
     });
@@ -87,7 +87,7 @@ describe("CodexRoutingAdvisor", () => {
 
   it("ignores low-confidence advice", async () => {
     const advisor = new CodexRoutingAdvisor(config, async () => JSON.stringify({
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       reasoningEffort: "medium",
       confidence: "low",
       reasonCode: "balanced",
@@ -110,7 +110,7 @@ describe("CodexRoutingAdvisor", () => {
 
   it("enforces a high floor for coupled work", async () => {
     const advisor = new CodexRoutingAdvisor(config, async () => JSON.stringify({
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       reasoningEffort: "low",
       confidence: "high",
       reasonCode: "complexity",
@@ -133,13 +133,23 @@ describe("CodexRoutingAdvisor", () => {
     }));
     await assert.rejects(() => advisor.advise(job, issue, pullRequest, baseline), /disallowed model/);
   });
+
+  it("rejects Astra for ordinary work even with high-confidence max-effort advice", async () => {
+    const advisor = new CodexRoutingAdvisor(config, async () => JSON.stringify({
+      model: "gpt-6-astra",
+      reasoningEffort: "max",
+      confidence: "high",
+      reasonCode: "risk",
+    }));
+    await assert.rejects(() => advisor.advise(job, issue, pullRequest, baseline), /disallowed model/);
+  });
 });
 
 describe("shouldConsultRoutingAdvisor", () => {
   it("consults only ambiguous deterministic routes", () => {
     assert.equal(shouldConsultRoutingAdvisor(job, baseline), true);
     assert.equal(
-      shouldConsultRoutingAdvisor({ ...job, requestedModel: "gpt-5.6-sol" }, baseline),
+      shouldConsultRoutingAdvisor({ ...job, requestedModel: "gpt-6-astra" }, baseline),
       false,
     );
     assert.equal(

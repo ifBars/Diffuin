@@ -77,7 +77,7 @@ function parseExplicitCommand(mode: TaskMode, tokens: string[]): MentionCommand 
     if (token === "--model" || token.startsWith("--model=")) {
       const parsed = optionValue(token, tokens[index + 1]);
       if (!parsed.value || !/^[A-Za-z0-9._-]+$/.test(parsed.value)) {
-        return invalid(mode, "--model requires a model identifier such as gpt-5.6-luna");
+        return invalid(mode, "--model requires a model identifier such as gpt-6-luna");
       }
       requestedModel = parsed.value;
       index += parsed.consumed;

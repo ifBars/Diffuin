@@ -4,8 +4,8 @@ import { routeExecution, validateOverrides } from "../src/routing.js";
 import type { Job, PullRequestContext } from "../src/types.js";
 
 const config = {
-  codexModel: "gpt-5.6-luna",
-  allowedCodexModels: new Set(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]),
+  codexModel: "gpt-6-luna",
+  allowedCodexModels: new Set(["gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra"]),
   sparkModels: new Set(["gpt-5.3-codex-spark"]),
   sparkReasoningEffort: "medium" as const,
   codexReasoningEffort: "max" as const,
@@ -52,7 +52,7 @@ describe("routeExecution", () => {
   it("uses medium for a small low-risk review", () => {
     const route = routeExecution(job, pullRequest(), pullRequest(), config);
     assert.equal(route.reasoningEffort, "medium");
-    assert.equal(route.model, "gpt-5.6-luna");
+    assert.equal(route.model, "gpt-6-luna");
   });
 
   it("passes free-form PR review language through for agent interpretation", () => {
@@ -64,26 +64,73 @@ describe("routeExecution", () => {
     const automatic = { ...job, mode: "auto" as const, task: "remove x from this PR" };
     const route = routeExecution(automatic, pullRequest(), pullRequest(), config);
     assert.equal(route.mode, "auto");
-    assert.equal(route.model, "gpt-5.6-luna");
+    assert.equal(route.model, "gpt-6-luna");
     assert.equal(route.reasoningEffort, "medium");
     assert.equal(route.reason, "bounded request");
 
     for (const task of ["move x beside the other helper", "How does x work in this PR?"]) {
       const followUp = routeExecution({ ...automatic, task }, pullRequest(), pullRequest(), config);
-      assert.equal(followUp.model, "gpt-5.6-luna");
+      assert.equal(followUp.model, "gpt-6-luna");
       assert.equal(followUp.reasoningEffort, "medium");
     }
   });
 
   it("escalates a large review to max", () => {
     const pr = pullRequest({ changedFiles: 25, additions: 2_000, deletions: 500 });
-    assert.equal(routeExecution(job, pr, pr, config).reasoningEffort, "max");
+    const route = routeExecution(job, pr, pr, config);
+    assert.equal(route.reasoningEffort, "max");
+    assert.equal(route.model, "gpt-6-astra");
+  });
+
+  it("uses Sol for a substantial review below the Astra threshold", () => {
+    const pr = pullRequest({ changedFiles: 8, additions: 600 });
+    const route = routeExecution(job, pr, pr, config);
+    assert.equal(route.reasoningEffort, "xhigh");
+    assert.equal(route.model, "gpt-6.1-sol");
+  });
+
+  it("reserves Astra for exceptionally broad source-backed work", () => {
+    const route = routeExecution(
+      { ...job, kind: "issue", mode: "investigate", task: "Investigate the entire state machine." },
+      { title: "Networking and persistence", body: "multiplayer save load lifecycle " + "details ".repeat(1_400) },
+      null,
+      config,
+    );
+    assert.equal(route.model, "gpt-6-astra");
+    assert.equal(route.reasoningEffort, "max");
+  });
+
+  it("does not select Astra merely because max effort was requested", () => {
+    const route = routeExecution({ ...job, requestedReasoningEffort: "max" }, pullRequest(), pullRequest(), config);
+    assert.equal(route.model, "gpt-6.1-sol");
+    assert.equal(route.reasoningEffort, "max");
+  });
+
+  it("falls back to Sol when Astra is unavailable for the hardest review", () => {
+    const pr = pullRequest({ changedFiles: 25 });
+    const route = routeExecution(job, pr, pr, {
+      ...config,
+      allowedCodexModels: new Set(["gpt-6-luna", "gpt-6.1-sol"]),
+    });
+    assert.equal(route.model, "gpt-6.1-sol");
+    assert.equal(route.reasoningEffort, "max");
+  });
+
+  it("maps the legacy minimal effort override to low for the current models", () => {
+    for (const requestedModel of ["gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra"]) {
+      const route = routeExecution(
+        { ...job, requestedModel, requestedReasoningEffort: "minimal" },
+        pullRequest(), pullRequest(), config,
+      );
+      assert.equal(route.model, requestedModel);
+      assert.equal(route.reasoningEffort, "low");
+    }
   });
 
   it("routes focused plans to high and honors explicit overrides", () => {
     const planJob = { ...job, kind: "issue" as const, mode: "plan" as const };
     const route = routeExecution(planJob, { title: "Add a station", body: "Small API" }, null, config);
-    assert.equal(route.model, "gpt-5.6-terra");
+    assert.equal(route.model, "gpt-6.1-sol");
     assert.equal(route.reasoningEffort, "high");
     assert.equal(
       routeExecution({ ...planJob, requestedReasoningEffort: "high" }, { title: "Add a station", body: null }, null, config).reasoningEffort,
@@ -115,7 +162,7 @@ describe("routeExecution", () => {
       config,
     );
     assert.equal(route.mode, "auto");
-    assert.equal(route.model, "gpt-5.6-terra");
+    assert.equal(route.model, "gpt-6.1-sol");
     assert.equal(route.reasoningEffort, "high");
   });
 
@@ -131,9 +178,9 @@ describe("routeExecution", () => {
   });
 
   it("preserves explicit model and effort overrides", () => {
-    const explicit = { ...job, requestedModel: "gpt-5.6-sol", requestedReasoningEffort: "xhigh" as const };
+    const explicit = { ...job, requestedModel: "gpt-6-astra", requestedReasoningEffort: "xhigh" as const };
     const route = routeExecution(explicit, pullRequest(), pullRequest(), config);
-    assert.equal(route.model, "gpt-5.6-sol");
+    assert.equal(route.model, "gpt-6-astra");
     assert.equal(route.reasoningEffort, "xhigh");
   });
 
@@ -211,12 +258,12 @@ describe("routeExecution", () => {
       allowedCodexModels: new Set([...config.allowedCodexModels, "gpt-5.3-codex-spark"]),
     };
     const route = routeExecution(
-      { ...job, task: "quick review", requestedModel: "gpt-5.6-sol" },
+      { ...job, task: "quick review", requestedModel: "gpt-6-astra" },
       pullRequest(),
       pullRequest(),
       sparkConfig,
     );
-    assert.equal(route.model, "gpt-5.6-sol");
+    assert.equal(route.model, "gpt-6-astra");
   });
 
   it("respects disabled automatic routing for quick reviews", () => {
@@ -230,7 +277,7 @@ describe("routeExecution", () => {
         allowedCodexModels: new Set([...config.allowedCodexModels, "gpt-5.3-codex-spark"]),
       },
     );
-    assert.equal(route.model, "gpt-5.6-luna");
+    assert.equal(route.model, "gpt-6-luna");
   });
 
   it("does not route unrelated fast wording through Spark", () => {

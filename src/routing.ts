@@ -28,8 +28,13 @@ const REASONING_RANK: Record<ReasoningEffort, number> = {
   max: 5,
 };
 
-const BALANCED_MODEL = "gpt-5.6-terra";
-const LUNA_MODEL = "gpt-5.6-luna";
+const BALANCED_MODEL = "gpt-6.1-sol";
+const LUNA_MODEL = "gpt-6-luna";
+export const HARDEST_MODEL = "gpt-6-astra";
+const HARDEST_REASONS = new Set([
+  "large or high-risk pull request",
+  "exceptionally broad source-backed request",
+]);
 const EFFICIENT_REASONS = new Set([
   "bounded request",
   "focused request",
@@ -185,9 +190,13 @@ function completeRoute(
 ): ExecutionRoute {
   const model = job.requestedModel ?? preferredModel ?? automaticModel(reasoningEffort, reason, config);
   const useSparkDefault = !job.requestedReasoningEffort && config.sparkModels.has(model);
-  const effectiveReasoningEffort = useSparkDefault
+  const routedReasoningEffort = useSparkDefault
     ? preferredSparkReasoningEffort ?? config.sparkReasoningEffort
     : reasoningEffort;
+  const effectiveReasoningEffort = routedReasoningEffort === "minimal" &&
+    [LUNA_MODEL, BALANCED_MODEL, HARDEST_MODEL].includes(model)
+    ? "low"
+    : routedReasoningEffort;
   const effectiveReason = useSparkDefault && effectiveReasoningEffort !== reasoningEffort
     ? `${reason}; ${preferredSparkReasoningEffort ? "Spark large-review floor" : "Spark provider default"}`
     : reason;
@@ -214,6 +223,9 @@ function automaticModel(reasoningEffort: ReasoningEffort, reason: string, config
   if (EFFICIENT_REASONS.has(reason) && config.allowedCodexModels.has(LUNA_MODEL)) {
     return LUNA_MODEL;
   }
-  const preferred = reasoningEffort === "xhigh" || reasoningEffort === "max" ? LUNA_MODEL : BALANCED_MODEL;
-  return config.allowedCodexModels.has(preferred) ? preferred : config.codexModel;
+  // A requested max effort alone must not escalate a focused task to Astra.
+  if (reasoningEffort === "max" && HARDEST_REASONS.has(reason) && config.allowedCodexModels.has(HARDEST_MODEL)) {
+    return HARDEST_MODEL;
+  }
+  return config.allowedCodexModels.has(BALANCED_MODEL) ? BALANCED_MODEL : config.codexModel;
 }

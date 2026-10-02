@@ -4,8 +4,8 @@ import { routeExecution } from "../src/routing.js";
 import type { IssueContext, Job, PullRequestContext, ReasoningEffort } from "../src/types.js";
 
 const config = {
-  codexModel: "gpt-5.6-luna",
-  allowedCodexModels: new Set(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]),
+  codexModel: "gpt-6-luna",
+  allowedCodexModels: new Set(["gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra"]),
   sparkModels: new Set(["gpt-5.3-codex-spark"]),
   sparkReasoningEffort: "medium" as const,
   codexReasoningEffort: "max" as const,
@@ -46,7 +46,7 @@ const cases: CalibrationCase[] = [
     name: "#215 bounded smoke request",
     task: "Check that the default branch can be read and report what you find.",
     issue: { title: "Diffuin smoke test", body: "Temporary read-only verification." },
-    expectedModel: "gpt-5.6-luna",
+    expectedModel: "gpt-6-luna",
     expectedEffort: "medium",
   },
   {
@@ -56,7 +56,7 @@ const cases: CalibrationCase[] = [
       title: "Custom NPCs do not respect property boundaries",
       body: "Inspect the IL2CPP behavior for a custom NPC entering a property.",
     },
-    expectedModel: "gpt-5.6-terra",
+    expectedModel: "gpt-6.1-sol",
     expectedEffort: "high",
   },
   {
@@ -66,7 +66,7 @@ const cases: CalibrationCase[] = [
       title: "Expose dialogue node and completion events",
       body: "Add an API without direct Harmony access and keep behavior compatible across Mono and IL2CPP.",
     },
-    expectedModel: "gpt-5.6-terra",
+    expectedModel: "gpt-6.1-sol",
     expectedEffort: "high",
   },
   {
@@ -76,7 +76,7 @@ const cases: CalibrationCase[] = [
       title: "NPC.Panic silently does nothing for non-host clients",
       body: "Remove or narrow a redundant server guard around a client-callable RPC and test both runtimes.",
     },
-    expectedModel: "gpt-5.6-terra",
+    expectedModel: "gpt-6.1-sol",
     expectedEffort: "high",
   },
   {
@@ -86,7 +86,7 @@ const cases: CalibrationCase[] = [
       title: "Custom NPC revive bypasses authoritative networking after spawn",
       body: "Use the fallback only before the FishNet lifecycle initializes. Preserve server authority, replicated state, save/load restoration, and repeated death/revive behavior.",
     },
-    expectedModel: "gpt-5.6-luna",
+    expectedModel: "gpt-6.1-sol",
     expectedEffort: "xhigh",
   },
   {
@@ -96,7 +96,7 @@ const cases: CalibrationCase[] = [
       title: "Expected NPCAction reflection fallback emits AccessTools warning",
       body: "Mono exposes a field while IL2CPP exposes a property. Replace the noisy Harmony probe without changing behavior.",
     },
-    expectedModel: "gpt-5.6-terra",
+    expectedModel: "gpt-6.1-sol",
     expectedEffort: "high",
   },
   {
@@ -118,7 +118,7 @@ const cases: CalibrationCase[] = [
       changedFiles: 2,
       files: ["S1API/Internal/Patches/NPCPatches.cs", "S1API.Tests/Entities/NPCScheduleReflectionTests.cs"],
     },
-    expectedModel: "gpt-5.6-luna",
+    expectedModel: "gpt-6-luna",
     expectedEffort: "medium",
   },
   {
@@ -137,7 +137,7 @@ const cases: CalibrationCase[] = [
       changedFiles: 22,
       files: Array.from({ length: 22 }, (_, index) => `file-${index}.cs`),
     },
-    expectedModel: "gpt-5.6-luna",
+    expectedModel: "gpt-6-astra",
     expectedEffort: "max",
   },
 ];

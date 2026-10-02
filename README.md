@@ -61,17 +61,22 @@ Play Mode, Mono runtime, IL2CPP runtime, multiplayer, save/load, or full
 end-to-end validation. Its output separates source/static evidence from the
 manual runtime checks a maintainer still needs to perform.
 
-The fallback model is `gpt-5.6-luna`. Automatic routing uses
-`gpt-5.6-terra` at `medium` or `high` for bounded changes, focused questions,
-ordinary reviews, and source-backed technical work. It reserves
-`gpt-5.6-luna` at `xhigh` or `max` for genuinely coupled work and unusually
-large reviews. The latest request drives the route: a small PR follow-up does
+The fallback model is `gpt-6-luna`. Automatic routing uses Luna for bounded
+changes, focused questions, and small low-risk reviews, and `gpt-6.1-sol` for
+ordinary reviews, source-backed technical work, and coupled changes.
+`gpt-6-astra` is reserved exclusively for the hardest automatic routes: reviews
+with at least 20 changed files, 2,000 changed lines, or eight risk signals, and
+source-backed requests with over 10,000 context characters and multiple deep
+complexity signals. These routes use `max` reasoning. An explicit effort override
+alone does not select Astra, and the advisor cannot select Astra for middle cases.
+Legacy `minimal` effort overrides are mapped to `low` for these current models.
+The latest request drives the route: a small PR follow-up does
 not inherit the full issue or PR's complexity, while broad reviews still account
 for the complete diff. Mentions can override both model and reasoning within
 deployment-owned allowlists.
 
 Ambiguous middle cases receive a second, bounded routing decision from
-`gpt-5.6-luna` at `medium` reasoning. The advisor sees only task metadata,
+`gpt-6-luna` at `medium` reasoning. The advisor sees only task metadata,
 bounded issue text, diff counts, file names, the deterministic baseline, and
 the model allowlist. It runs read-only with network and web search disabled and
 returns a closed JSON schema. Explicit overrides, quick reviews, simple focused
@@ -79,7 +84,7 @@ requests, disabled routing, and maximum-risk routes skip the advisor. Low
 confidence, invalid output, timeouts, and policy violations fall back to the
 deterministic route.
 
-Provider selection follows the routed model. The `gpt-5.6-*` models run through
+Provider selection follows the routed model. The Luna, Sol, and Astra models run through
 the Codex SDK. Models listed in `SPARK_MODELS` run through the custom Spark
 `automation --stdio` protocol; the default Spark model is
 `gpt-5.3-codex-spark`. Spark defaults to `medium` reasoning for a better
@@ -132,7 +137,7 @@ Copy `.env.example` to `.env`. Required values are:
 | `CODEX_REASONING_ROUTING` | Enables automatic reasoning selection; defaults to `true` |
 | `CODEX_REASONING_EFFORT` | Fixed fallback used when automatic routing is disabled |
 | `ROUTING_ADVISOR_ENABLED` | Enables the bounded Luna routing advisor for ambiguous cases; defaults to `true` |
-| `ROUTING_ADVISOR_MODEL` | Internal advisor model; defaults to `gpt-5.6-luna` |
+| `ROUTING_ADVISOR_MODEL` | Internal advisor model; defaults to `gpt-6-luna` |
 | `ROUTING_ADVISOR_TIMEOUT_MS` | Advisor timeout before deterministic fallback; defaults to 30 seconds |
 | `SPARK_COMMAND` | Spark executable name or absolute path; defaults to `spark` |
 | `SPARK_MODELS` | Comma-separated models dispatched through Spark; defaults to `gpt-5.3-codex-spark` |
@@ -334,11 +339,11 @@ Typical review and planning requests are read-only:
 Explicit commands support safe per-request overrides:
 
 ```text
-@Diffuin review --model gpt-5.6-terra --effort high
+@Diffuin review --model gpt-6.1-sol --effort high
 @Diffuin quick review
 @Diffuin review --model gpt-5.3-codex-spark -- focus on correctness regressions
-@Diffuin investigate --model gpt-5.6-luna -- research the likely lifecycle seam
-@Diffuin plan --model gpt-5.6-luna --effort xhigh -- focus on persistence and multiplayer authority
+@Diffuin investigate --model gpt-6-luna -- research the likely lifecycle seam
+@Diffuin plan --model gpt-6-luna --effort xhigh -- focus on persistence and multiplayer authority
 ```
 
 Supported commands are `review`, `investigate`, `plan`, `implement`, and
