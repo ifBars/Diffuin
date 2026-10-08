@@ -89,9 +89,8 @@ export class Worker {
         guidanceReference,
         token,
       );
-      githubReadSession = this.githubReadBroker.openSession(job, issue, repositoryGuidance);
-
-      const profile = await this.profile.prepare();
+      const profile = await this.profile.prepare(job);
+      githubReadSession = this.githubReadBroker.openSession(job, issue, repositoryGuidance, profile.referenceSnapshots);
       const projectMemories = this.store.listApplicableMemories?.(
         job,
         pullRequest?.files ?? [],

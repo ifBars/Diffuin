@@ -1,0 +1,10 @@
+[
+  { "id": "s1-codearchiver-alternate", "label": "Regular Mono stripped source", "repository": "k073l/s1-codearchiver", "branch": "alternate", "paths": ["ScheduleOne-stripped"], "depth": 12, "access": "public", "runtime": "source" },
+  { "id": "s1-codearchiver-alternate-beta", "label": "Beta Mono stripped source", "repository": "k073l/s1-codearchiver", "branch": "alternate-beta", "paths": ["ScheduleOne-stripped"], "depth": 12, "access": "public", "runtime": "source" },
+  { "id": "mono-main", "label": "Regular Mono assemblies", "repository": "ifBars/schedule-one-assemblies", "branch": "main", "paths": ["Managed", "MelonLoader"], "depth": 1, "access": "installation", "runtime": "mono" },
+  { "id": "mono-beta", "label": "Beta Mono assemblies", "repository": "ifBars/schedule-one-assemblies", "branch": "beta", "paths": ["Managed", "MelonLoader"], "depth": 1, "access": "installation", "runtime": "mono" },
+  { "id": "il2cpp-main", "label": "Regular IL2CPP wrappers", "repository": "ifBars/il2cpp-scheduleone-assemblies", "branch": "main", "paths": ["MelonLoader"], "depth": 1, "access": "installation", "runtime": "il2cpp" },
+  { "id": "il2cpp-beta", "label": "Beta IL2CPP wrappers", "repository": "ifBars/il2cpp-scheduleone-assemblies", "branch": "beta", "paths": ["MelonLoader"], "depth": 1, "access": "installation", "runtime": "il2cpp" },
+  { "id": "s1interop", "label": "S1Interop tooling", "repository": "ifBars/S1Interop", "branch": "main", "paths": ["src", "docs"], "depth": 4, "access": "public" },
+  { "id": "il2cppinterop", "label": "IL2CPP interop implementation", "repository": "ifBars/Il2CppInterop", "branch": "master", "paths": ["Il2CppInterop.Runtime", "Il2CppInterop.HarmonySupport"], "depth": 4, "access": "public" }
+]

@@ -48,6 +48,25 @@ const references: ScheduleOneReferences = {
 const profile = buildScheduleOneProfileContext(references);
 
 describe("buildPrompt", () => {
+  it("distinguishes upstream freshness from game provenance without exposing private cache paths", () => {
+    const profile = buildScheduleOneProfileContext({
+      ...references,
+      snapshots: [{
+        id: "mono-beta", label: "Beta Mono assemblies", repository: "ifBars/schedule-one-assemblies",
+        branch: "beta", path: "/private/assembly-cache", revision: "a".repeat(40),
+        commitSubject: "Game f11", commitDate: "2026-10-07", checkedAt: "",
+        freshness: "stale", depth: 1, paths: ["Managed"], runtime: "mono",
+      }],
+    });
+    const prompt = buildPrompt(job, pullRequest, pullRequest, profile);
+    assert.match(prompt, /mono-beta: Beta Mono assemblies/);
+    assert.match(prompt, /stale; commit/);
+    assert.match(prompt, /upstream checked not verified this run/);
+    assert.match(prompt, /refreshed upstream repository can still lag/);
+    assert.match(prompt, /reference_decompile_type/);
+    assert.doesNotMatch(prompt, /\/private\/assembly-cache/);
+    assert.ok(!profile.readRoots.includes("/private/assembly-cache"));
+  });
   it("frames PR work as source-backed review without runtime claims", () => {
     const prompt = buildPrompt(
       job,

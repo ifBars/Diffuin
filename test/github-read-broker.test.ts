@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { discoverMentionedRepositories, GitHubReadBroker } from "../src/github-read-broker.js";
-import type { GitHubReadSource, IssueContext, WorkRequest } from "../src/types.js";
+import type { GitHubReadSource, IssueContext, WorkRequest, ReferenceSnapshot } from "../src/types.js";
 
 const request: WorkRequest = {
   deliveryId: "delivery",
@@ -28,6 +28,40 @@ const context: IssueContext = {
 };
 
 describe("GitHubReadBroker", () => {
+  it("exposes only this job's authorized reference metadata through MCP", async () => {
+    const source: GitHubReadSource = {
+      readRepository: async () => ({}), readFile: async () => ({}), searchCode: async () => ({}),
+      readIssue: async () => ({}), readPullRequest: async () => ({}),
+    };
+    const snapshot: ReferenceSnapshot = {
+      id: "mono-beta", label: "Beta Mono assemblies", repository: "ifBars/schedule-one-assemblies",
+      branch: "beta", path: "/private/cache/never-in-response", revision: "a".repeat(40),
+      commitSubject: "Game f11", commitDate: "2026-10-07", checkedAt: "2026-10-08",
+      freshness: "refreshed", depth: 1, paths: ["Managed"], runtime: "mono",
+    };
+    const broker = new GitHubReadBroker(source);
+    await broker.start();
+    const session = broker.openSession(request, context, [], [snapshot]);
+    const client = new Client({ name: "reference-test", version: "1.0.0" });
+    const transport = new StreamableHTTPClientTransport(new URL(session.url), {
+      requestInit: { headers: { Authorization: `Bearer ${session.token}` } },
+    });
+    try {
+      await client.connect(transport as unknown as Parameters<Client["connect"]>[0]);
+      const tools = await client.listTools();
+      assert.ok(tools.tools.some((tool) => tool.name === "reference_decompile_type"));
+      assert.ok(tools.tools.every((tool) => tool.annotations?.readOnlyHint));
+      const status = await client.callTool({ name: "reference_status", arguments: {} });
+      assert.match(JSON.stringify(status.content), /Game f11/);
+      assert.doesNotMatch(JSON.stringify(status.content), /private\/cache/);
+      const denied = await client.callTool({ name: "reference_files", arguments: { id: "other-private-repository" } });
+      assert.equal(denied.isError, true);
+    } finally {
+      await client.close();
+      session.close();
+      await broker.stop();
+    }
+  });
   it("discovers and deduplicates only explicit repository references", () => {
     assert.deepEqual(discoverMentionedRepositories(request, context), [
       "ifBars/S1API",

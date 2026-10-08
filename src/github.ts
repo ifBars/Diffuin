@@ -239,6 +239,23 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
     };
   }
 
+  async getReferenceToken(request: WorkRequest, repository: string): Promise<string> {
+    const { owner, repo } = splitRepository(repository);
+    // Recheck actor access even when a private reference is already cached.
+    const { metadata } = await this.authorizedReadClient(request, owner, repo);
+    if (!metadata) throw new Error("Reference repository metadata is unavailable");
+    const authentication = await this.app.octokit.auth({
+      type: "installation",
+      installationId: request.installationId,
+      repositoryIds: [metadata.data.id],
+      permissions: { contents: "read" },
+    });
+    if (!authentication || typeof authentication !== "object" || !("token" in authentication)) {
+      throw new Error("GitHub did not return a reference read token");
+    }
+    return String(authentication.token);
+  }
+
   async readFile(
     request: WorkRequest,
     repository: string,

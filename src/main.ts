@@ -38,6 +38,10 @@ const profile = config.agentProfile === "schedule-one"
     config.scheduleOneSkillPath,
     config.scheduleOneCodeArchiverUrl,
     config.scheduleOneAssetRipperPath,
+    {
+      sources: config.scheduleOneReferenceSources,
+      authorize: (request, repository) => github.getReferenceToken(request, repository),
+    },
   ))
   : new GeneralAgentProfile(config.skillRoot);
 const routingAdvisor = config.routingAdvisorEnabled

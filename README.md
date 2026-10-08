@@ -25,6 +25,30 @@ guidance are included too, so a repository can declare its own read-only source
 dependencies without deployment-level special cases. Pull-request jobs read
 this guidance from the trusted base branch, not the contributor-controlled head.
 
+The Schedule One profile also refreshes a deployment-owned catalog in
+[`references.json`](references.json) before each job. It includes regular/beta
+Mono assemblies, IL2CPP wrappers, bounded archiver history, S1Interop, and
+Il2CppInterop implementation references. Private repositories require both the
+GitHub App installation and the requesting actor to have read access. The App
+mints repository-scoped, contents-read tokens for reference preparation; tokens
+never appear in prompts, Git remotes, or model-visible tool results.
+
+The localhost `diffuin_github` broker exposes `reference_status`,
+`reference_history`, `reference_files`, `reference_read`, `reference_diff`, and
+`reference_decompile_type` for the snapshots authorized for that job. Both
+Codex and Spark can inspect these references without general network or command
+access. Decompilation inspects one named type using pinned ILSpy tooling, with
+a 20-second timeout, 128 MiB managed heap cap, bounded output, and one process
+at a time. This is static metadata/code inspection; generated IL2CPP wrapper
+bodies do not establish native IL2CPP game behavior.
+
+Each snapshot reports its commit, subject, date, and upstream refresh status.
+A failed refresh may retain a verified cache marked **stale**. A successful
+refresh establishes the latest upstream repository commit, not the latest
+Steam version: an archiver that ends at f10 cannot supply an f11 comparison.
+The assembly commit's version/provenance must be checked separately. No game
+installation, Steam credentials, Unity runtime, or .NET build SDK is added.
+
 ## Current GitHub connector
 
 1. Verifies the GitHub webhook signature.
@@ -327,6 +351,29 @@ a sandbox write root. Keep enough free volume capacity for `/data/codex-home`,
 the SQLite queue, cloned source references, and temporary workspaces.
 
 ## Use
+
+### Hosted reference configuration
+
+Edit the tracked `references.json` catalog to change reference repositories,
+branches, evidence directories, or history depth. A private deployment may
+instead upload a catalog to `/data/references.json` using the Northflank CLI
+and set `SCHEDULE_ONE_REFERENCES_PATH` once. Repository guidance and issue text
+cannot add arbitrary cached repositories. Use a new ID when changing a cached
+entry's repository or branch; existing IDs are tied to their original source.
+
+Ensure the Diffuin GitHub App installation includes
+`ifBars/schedule-one-assemblies` and `ifBars/il2cpp-scheduleone-assemblies`.
+Missing access is reported as unavailable, including when a previous job has
+already cached the repository. Assembly histories default to one commit;
+archiver history is bounded to 12 commits, and tooling references to four.
+Refreshes run serially with single-threaded Git packing. Cached data persists
+under `DATA_DIR/references`, so budget volume space for checked-out files and
+Git objects; obsolete caches are not automatically deleted.
+
+The free Northflank deployment can perform these focused static inspections.
+Repository builds/contract suites still require their own SDK and dependencies,
+and portrait rendering, save reloads, and multiplayer behavior still require
+gameplay validation elsewhere.
 
 Typical review and planning requests are read-only:
 

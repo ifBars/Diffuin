@@ -108,6 +108,23 @@ export interface ScheduleOneReferences {
   betaSourcePath?: string | undefined;
   assetRipperPath?: string | undefined;
   warnings: string[];
+  snapshots?: readonly ReferenceSnapshot[];
+}
+
+export interface ReferenceSnapshot {
+  id: string;
+  label: string;
+  repository: string;
+  branch: string;
+  path: string;
+  revision: string;
+  commitSubject: string;
+  commitDate: string;
+  checkedAt: string;
+  freshness: "refreshed" | "stale";
+  depth: number;
+  paths: readonly string[];
+  runtime?: "mono" | "il2cpp" | "source" | undefined;
 }
 
 export interface AgentProfileContext {
@@ -121,10 +138,11 @@ export interface AgentProfileContext {
   behaviorGuidance: string;
   readRoots: readonly string[];
   assetRipperPath?: string | undefined;
+  referenceSnapshots?: readonly ReferenceSnapshot[];
 }
 
 export interface AgentProfilePort {
-  prepare(): Promise<AgentProfileContext>;
+  prepare(request?: WorkRequest): Promise<AgentProfileContext>;
 }
 
 export interface GitHubReadSource {
@@ -157,6 +175,7 @@ export interface GitHubReadBrokerPort {
     request: WorkRequest,
     context: IssueContext,
     repositoryGuidance?: readonly string[],
+    references?: readonly ReferenceSnapshot[],
   ): GitHubReadSession;
 }
 

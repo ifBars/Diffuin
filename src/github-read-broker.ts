@@ -5,12 +5,14 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Request, Response } from "express";
 import { z } from "zod";
+import { registerReferenceTools } from "./reference-tools.js";
 import type {
   GitHubReadBrokerPort,
   GitHubReadSession,
   GitHubReadSource,
   IssueContext,
   WorkRequest,
+  ReferenceSnapshot,
 } from "./types.js";
 
 const SESSION_LIFETIME_MS = 30 * 60 * 1000;
@@ -21,6 +23,7 @@ interface ActiveSession {
   request: WorkRequest;
   repositories: ReadonlySet<string>;
   expiresAt: number;
+  references: readonly ReferenceSnapshot[];
 }
 
 export class GitHubReadBroker implements GitHubReadBrokerPort {
@@ -62,6 +65,7 @@ export class GitHubReadBroker implements GitHubReadBrokerPort {
     request: WorkRequest,
     context: IssueContext,
     repositoryGuidance: readonly string[] = [],
+    references: readonly ReferenceSnapshot[] = [],
   ): GitHubReadSession {
     if (!this.endpoint) throw new Error("GitHub read broker has not started");
     this.removeExpiredSessions();
@@ -71,6 +75,7 @@ export class GitHubReadBroker implements GitHubReadBrokerPort {
       request,
       repositories: new Set(repositories.map((repository) => repository.toLowerCase())),
       expiresAt: Date.now() + SESSION_LIFETIME_MS,
+      references,
     });
     let closed = false;
     return {
@@ -113,6 +118,7 @@ export class GitHubReadBroker implements GitHubReadBrokerPort {
   private createMcpServer(session: ActiveSession): McpServer {
     const server = new McpServer({ name: "diffuin-github-read", version: "1.0.0" });
     const annotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
+    registerReferenceTools(server, session.references);
 
     server.registerTool("github_get_repository", {
       description: "Read metadata for an allowed GitHub repository.",

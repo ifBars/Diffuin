@@ -23,14 +23,25 @@ RUN apt-get update \
     && unzip -q /tmp/spark.zip -d /tmp/spark \
     && install -m 0755 /tmp/spark/spark /usr/local/bin/spark
 
+FROM mcr.microsoft.com/dotnet/sdk:8.0-bookworm-slim AS ilspy
+RUN dotnet tool install ilspycmd --version 9.1.0.7988 --tool-path /opt/ilspy
+
+FROM mcr.microsoft.com/dotnet/runtime:8.0-bookworm-slim AS dotnet-runtime
+
 FROM node:24-trixie-slim AS runtime
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git ripgrep tini \
+    && apt-get install -y --no-install-recommends ca-certificates git ripgrep tini libstdc++6 libssl3t64 zlib1g \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production \
     XDG_DATA_HOME="/data/spark-data" \
-    PATH="/app/node_modules/.bin:${PATH}"
+    DOTNET_ROOT="/usr/share/dotnet" \
+    DOTNET_CLI_TELEMETRY_OPTOUT="1" \
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT="1" \
+    PATH="/opt/ilspy:/usr/share/dotnet:/app/node_modules/.bin:${PATH}"
+COPY --from=dotnet-runtime /usr/share/dotnet /usr/share/dotnet
+COPY --from=ilspy /opt/ilspy /opt/ilspy
+COPY references.json ./references.json
 COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist

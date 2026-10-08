@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
 import type { AgentProfileId, ReasoningEffort } from "./types.js";
+import { loadReferenceCatalog, type ReferenceSource } from "./reference-catalog.js";
 
 const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -30,6 +31,7 @@ const schema = z.object({
   SCHEDULE_ONE_SKILL_PATH: z.string().min(1).default("./skills/schedule-one-modding"),
   SCHEDULE_ONE_CODE_ARCHIVER_URL: z.string().url().default("https://github.com/k073l/s1-codearchiver.git"),
   SCHEDULE_ONE_ASSETRIPPER_PATH: z.string().min(1).optional(),
+  SCHEDULE_ONE_REFERENCES_PATH: z.string().min(1).default("./references.json"),
 }).refine(
   (value) => Boolean(value.GITHUB_PRIVATE_KEY_PATH) !== Boolean(value.GITHUB_PRIVATE_KEY_BASE64),
   { message: "Set exactly one of GITHUB_PRIVATE_KEY_PATH or GITHUB_PRIVATE_KEY_BASE64" },
@@ -61,6 +63,7 @@ export interface Config {
   scheduleOneSkillPath: string;
   scheduleOneCodeArchiverUrl: string;
   scheduleOneAssetRipperPath?: string | undefined;
+  scheduleOneReferenceSources?: readonly ReferenceSource[];
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config {
@@ -104,6 +107,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     skillRoot: resolve(parsed.SKILL_ROOT),
     scheduleOneSkillPath: resolve(parsed.SCHEDULE_ONE_SKILL_PATH),
     scheduleOneCodeArchiverUrl: parsed.SCHEDULE_ONE_CODE_ARCHIVER_URL,
+    scheduleOneReferenceSources: parsed.DIFFUIN_PROFILE === "schedule-one"
+      ? loadReferenceCatalog(resolve(parsed.SCHEDULE_ONE_REFERENCES_PATH))
+      : [],
     scheduleOneAssetRipperPath: parsed.SCHEDULE_ONE_ASSETRIPPER_PATH
       ? resolve(parsed.SCHEDULE_ONE_ASSETRIPPER_PATH)
       : undefined,
