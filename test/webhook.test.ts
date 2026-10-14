@@ -12,6 +12,31 @@ const payload = {
 };
 
 describe("parseWorkRequest", () => {
+  it("queues an entire submitted changes-requested review without a mention and deduplicates redelivery", () => {
+    const review = {
+      ...payload, action: "submitted", pull_request: { number: 123 },
+      review: { id: 800, state: "changes_requested", user: { login: "octocat", type: "User" } },
+    };
+    const result = parseWorkRequest("pull_request_review", "first", review, "Diffuin");
+    assert.equal(result?.mode, "implement");
+    assert.equal(result?.commentKind, "review");
+    assert.equal(result?.commentId, 800);
+    assert.equal(result?.deliveryId, "review:7:800");
+    assert.equal(parseWorkRequest("pull_request_review", "retry", review, "Diffuin")?.deliveryId, result?.deliveryId);
+    for (const state of ["approved", "commented", "pending", "dismissed"]) {
+      assert.equal(parseWorkRequest("pull_request_review", "x", {
+        ...review, review: { ...review.review, state },
+      }, "Diffuin"), null);
+    }
+    assert.equal(parseWorkRequest("pull_request_review", "x", { ...review, action: "edited" }, "Diffuin"), null);
+    assert.equal(parseWorkRequest("pull_request_review", "x", {
+      ...review, review: { ...review.review, user: { login: "other[bot]", type: "Bot" } },
+    }, "Diffuin"), null);
+    assert.equal(parseWorkRequest("pull_request_review_comment", "x", {
+      ...payload, pull_request: { number: 123 }, comment: { ...payload.comment, body: "This leaks a native type" },
+    }, "Diffuin"), null);
+  });
+
   it("maps an issue comment on a pull request", () => {
     const result = parseWorkRequest("issue_comment", "delivery", payload, "Diffuin");
     assert.equal(result?.kind, "pull_request");

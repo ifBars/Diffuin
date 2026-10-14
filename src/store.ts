@@ -15,6 +15,7 @@ interface JobRow {
   repo: string;
   issue_number: number;
   comment_id: number;
+  comment_kind: WorkRequest["commentKind"];
   actor: string;
   kind: Job["kind"];
   task: string;
@@ -138,6 +139,7 @@ export class JobStore {
     this.ensureColumn("requested_model", "TEXT");
     this.ensureColumn("requested_reasoning_effort", "TEXT");
     this.ensureColumn("close_issue_on_merge", "INTEGER NOT NULL DEFAULT 0");
+    this.ensureColumn("comment_kind", "TEXT NOT NULL DEFAULT 'issue'");
     this.ensureTableColumn("run_artifacts", "provider", "TEXT");
     this.ensureTableColumn("run_artifacts", "model", "TEXT");
     this.ensureTableColumn("run_artifacts", "reasoning_effort", "TEXT");
@@ -154,14 +156,15 @@ export class JobStore {
       INSERT OR IGNORE INTO jobs (
         id, delivery_id, installation_id, repository_id, repository, owner, repo,
         issue_number, comment_id, actor, kind, task, task_mode, requested_model,
-        requested_reasoning_effort, close_issue_on_merge, status, created_at, updated_at
+        requested_reasoning_effort, close_issue_on_merge, status, created_at, updated_at, comment_kind
       ) VALUES (
         @id, @deliveryId, @installationId, @repositoryId, @repository, @owner, @repo,
         @issueNumber, @commentId, @actor, @kind, @task, @mode, @requestedModel,
-        @requestedReasoningEffort, @closeIssueOnMerge, @status, @createdAt, @updatedAt
+        @requestedReasoningEffort, @closeIssueOnMerge, @status, @createdAt, @updatedAt, @commentKind
       )
     `).run({
       ...job,
+      commentKind: job.commentKind ?? "issue",
       requestedModel: job.requestedModel ?? null,
       requestedReasoningEffort: job.requestedReasoningEffort ?? null,
       closeIssueOnMerge: job.closeIssueOnMerge ? 1 : 0,
@@ -495,6 +498,7 @@ function mapRow(row: JobRow): Job {
     repo: row.repo,
     issueNumber: row.issue_number,
     commentId: row.comment_id,
+    commentKind: row.comment_kind ?? "issue",
     actor: row.actor,
     kind: row.kind,
     task: row.task,

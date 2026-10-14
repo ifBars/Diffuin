@@ -6,6 +6,7 @@ import { validateOverrides } from "./routing.js";
 import { verifyGitHubSignature } from "./signature.js";
 import { JobStore } from "./store.js";
 import { parseWorkRequest } from "./webhook.js";
+import { canAutomaticallyAddressReview } from "./pull-request.js";
 import { parseFeedbackEvent, parseMemoryCommand, parsePullRequestOutcome } from "./learning.js";
 
 const MAX_WEBHOOK_BYTES = 1024 * 1024;
@@ -98,11 +99,16 @@ export function createDiffuinServer(config: Config, store: JobStore, github: Git
         return json(response, 202, { status: "invalid_command" });
       }
 
+      if (work.commentKind === "review" &&
+          !canAutomaticallyAddressReview(work, await github.getPullRequest(work), config.handle)) {
+        return json(response, 202, { status: "review_not_actionable" });
+      }
+
       const job = store.enqueue(work);
       if (!job) {
         return json(response, 202, { status: "duplicate" });
       }
-      await github.addReaction(work, "eyes");
+      await github.addReaction(work, "eyes").catch(() => undefined);
       return json(response, 202, { status: "queued", jobId: job.id });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

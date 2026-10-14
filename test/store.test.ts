@@ -34,6 +34,21 @@ const request: WorkRequest = {
 };
 
 describe("JobStore", () => {
+  it("persists review triggers through restart and deduplicates the review identity", () => {
+    const directory = mkdtempSync(join(tmpdir(), "diffuin-test-"));
+    directories.push(directory);
+    const path = join(directory, "jobs.sqlite");
+    const store = new JobStore(path);
+    const review = { ...request, deliveryId: "review:7:800", commentId: 800, commentKind: "review" as const };
+    assert.ok(store.enqueue(review));
+    store.close();
+    const reopened = new JobStore(path);
+    assert.equal(reopened.enqueue(review), null);
+    const claimed = reopened.claimNext();
+    assert.equal(claimed?.commentKind, "review");
+    assert.equal(claimed?.commentId, 800);
+    reopened.close();
+  });
   it("deduplicates deliveries and persists transitions", () => {
     const directory = mkdtempSync(join(tmpdir(), "diffuin-test-"));
     directories.push(directory);
@@ -75,6 +90,7 @@ describe("JobStore", () => {
     const store = new JobStore(path);
     assert.equal(store.get("legacy")?.mode, "auto");
     assert.equal(store.get("legacy")?.closeIssueOnMerge, false);
+    assert.equal(store.get("legacy")?.commentKind, "issue");
     store.close();
   });
 

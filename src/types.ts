@@ -23,6 +23,7 @@ export interface WorkRequest {
   repo: string;
   issueNumber: number;
   commentId: number;
+  commentKind?: "issue" | "review_comment" | "review";
   actor: string;
   kind: TriggerKind;
   task: string;
@@ -92,6 +93,8 @@ export interface FeedbackEvent extends WorkRequest {
 }
 
 export interface PullRequestContext extends IssueContext {
+  author?: string;
+  state?: string;
   baseBranch: string;
   headBranch: string;
   headSha: string;
@@ -100,6 +103,21 @@ export interface PullRequestContext extends IssueContext {
   deletions: number;
   changedFiles: number;
   files: string[];
+}
+
+export interface PullRequestReviewContext {
+  id: number;
+  actor: string;
+  state: string;
+  body: string;
+  comments: Array<{
+    id: number;
+    body: string;
+    path: string;
+    line: number | null;
+    diffHunk: string;
+    replyTo?: number;
+  }>;
 }
 
 export interface ScheduleOneReferences {
@@ -197,6 +215,8 @@ export interface GitHubPort {
   ): Promise<Array<{ actor: string; signal: "positive" | "negative" }>>;
   getIssue(request: WorkRequest): Promise<IssueContext>;
   getPullRequest(request: WorkRequest): Promise<PullRequestContext>;
+  getPullRequestReview?(request: WorkRequest): Promise<PullRequestReviewContext>;
+  replyToReviewComment?(request: WorkRequest, commentId: number, body: string): Promise<void>;
   updateIssue(request: WorkRequest, input: { title: string; body: string }): Promise<void>;
   getInstallationToken(request: WorkRequest): Promise<string>;
   createPullRequest(

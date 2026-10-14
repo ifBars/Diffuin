@@ -134,6 +134,7 @@ Create a GitHub App with:
 - Subscribe to events:
   - Issue comment
   - Pull request review comment
+  - Pull request review
   - Pull request
 
 Generate a private key and install the App only on repositories you intend to
@@ -435,6 +436,24 @@ On a pull request created by Diffuin, a direct request such as
 the change back to that pull request's `diffuin/*` branch. Implementation
 requests on branches not owned by Diffuin continue to open a separate follow-up
 pull request instead of writing directly to a maintainer's branch.
+
+Submitting a **Changes requested** review on an open Diffuin-authored PR also
+queues an implementation job automatically, without an `@Diffuin` mention.
+The reviewer must have write-equivalent access and the repository must be
+allowlisted. Enable the **Pull request review** webhook subscription in the
+GitHub App settings to receive these submissions.
+
+Diffuin reads the review body and all its inline findings, verifies each against
+the current PR head, fixes applicable findings, and pushes to the existing
+`diffuin/*` branch. It posts the commit, explanation, and validation details in
+the PR conversation and replies to the review's comment threads. Findings that
+are already fixed or not applicable receive an evidence-based explanation;
+they do not require a manufactured commit. Threads remain open for the reviewer.
+Approved, comment-only, pending, dismissed, bot-authored, and non-Diffuin PR
+reviews do not trigger automatic edits. Redelivery of the same review is
+deduplicated. If the PR head changes during the run, publication is refused.
+Existing reviews are not replayed by deployment; submit a new review or use an
+explicit `@Diffuin implement` request to revisit them.
 
 For read-only issue workflows, Diffuin may polish a materially basic issue title
 and description while preserving reporter facts and uncertainty. Already

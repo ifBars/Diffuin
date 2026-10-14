@@ -6,6 +6,7 @@ import type {
   IssueCommentContext,
   IssueContext,
   PullRequestContext,
+  PullRequestReviewContext,
   WorkRequest,
 } from "./types.js";
 
@@ -32,8 +33,12 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
   }
 
   async addReaction(request: WorkRequest, reaction: "+1" | "eyes" | "rocket" | "confused"): Promise<void> {
+    if (request.commentKind === "review") return;
     const octokit = await this.installation(request);
-    await octokit.rest.reactions.createForIssueComment({
+    const create = request.commentKind === "review_comment"
+      ? octokit.rest.reactions.createForPullRequestReviewComment
+      : octokit.rest.reactions.createForIssueComment;
+    await create({
       owner: request.owner,
       repo: request.repo,
       comment_id: request.commentId,
@@ -171,6 +176,8 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
     }, (page) => page.data.map((file) => file.filename));
     return {
       baseBranch: response.data.base.ref,
+      author: response.data.user?.login ?? "",
+      state: response.data.state,
       headBranch: response.data.head.ref,
       headSha: response.data.head.sha,
       headRepository: response.data.head.repo?.full_name ?? "",
@@ -182,6 +189,38 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
       files,
       comments: await this.getConversation(request),
     };
+  }
+
+  async getPullRequestReview(request: WorkRequest): Promise<PullRequestReviewContext> {
+    const octokit = await this.installation(request);
+    const review = await octokit.rest.pulls.getReview({
+      owner: request.owner, repo: request.repo,
+      pull_number: request.issueNumber, review_id: request.commentId,
+    });
+    const comments = await octokit.paginate(octokit.rest.pulls.listCommentsForReview, {
+      owner: request.owner, repo: request.repo,
+      pull_number: request.issueNumber, review_id: request.commentId, per_page: 100,
+    });
+    return {
+      id: review.data.id,
+      actor: review.data.user?.login ?? "",
+      state: review.data.state,
+      body: compactContext(review.data.body ?? ""),
+      comments: comments.map((comment) => ({
+        id: comment.id, body: compactContext(comment.body), path: comment.path,
+        line: comment.line ?? comment.original_line ?? null,
+        diffHunk: compactContext(comment.diff_hunk),
+        ...(comment.in_reply_to_id ? { replyTo: comment.in_reply_to_id } : {}),
+      })),
+    };
+  }
+
+  async replyToReviewComment(request: WorkRequest, commentId: number, body: string): Promise<void> {
+    const octokit = await this.installation(request);
+    await octokit.rest.pulls.createReplyForReviewComment({
+      owner: request.owner, repo: request.repo, pull_number: request.issueNumber,
+      comment_id: commentId, body,
+    });
   }
 
   async updateIssue(request: WorkRequest, input: { title: string; body: string }): Promise<void> {

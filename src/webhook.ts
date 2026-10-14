@@ -9,6 +9,7 @@ interface WebhookPayload {
   sender?: { login?: string; type?: string };
   issue?: { number?: number; pull_request?: unknown };
   pull_request?: { number?: number };
+  review?: { id?: number; state?: string; user?: { login?: string; type?: string } };
   comment?: { id?: number; body?: string; user?: { login?: string; type?: string } };
   changes?: { body?: { from?: string } };
 }
@@ -19,6 +20,9 @@ export function parseWorkRequest(
   payload: WebhookPayload,
   handle: string,
 ): WorkRequest | null {
+  if (eventName === "pull_request_review") {
+    return parseReviewRequest(payload);
+  }
   if (eventName !== "issue_comment" && eventName !== "pull_request_review_comment") {
     return null;
   }
@@ -56,6 +60,7 @@ export function parseWorkRequest(
     repo,
     issueNumber,
     commentId,
+    commentKind: eventName === "pull_request_review_comment" ? "review_comment" : "issue",
     actor,
     kind:
       eventName === "pull_request_review_comment" || payload.issue?.pull_request
@@ -67,6 +72,31 @@ export function parseWorkRequest(
     requestedModel: command.requestedModel,
     requestedReasoningEffort: command.requestedReasoningEffort,
     commandError: command.error,
+  };
+}
+
+function parseReviewRequest(payload: WebhookPayload): WorkRequest | null {
+  const review = payload.review;
+  if (payload.action !== "submitted" || review?.state?.toLowerCase() !== "changes_requested" ||
+      !review.user?.login || review.user.type === "Bot") return null;
+  const repository = payload.repository?.full_name;
+  const [owner, repo, extra] = repository?.split("/") ?? [];
+  const installationId = payload.installation?.id;
+  const repositoryId = payload.repository?.id;
+  const issueNumber = payload.pull_request?.number;
+  if (!repository || !owner || !repo || extra || !installationId || !repositoryId || !issueNumber || !review.id) {
+    throw new Error("GitHub review webhook is missing required installation or repository fields");
+  }
+  return {
+    deliveryId: `review:${repositoryId}:${review.id}`,
+    installationId, repositoryId, repository, owner, repo, issueNumber,
+    commentId: review.id,
+    commentKind: "review",
+    actor: review.user.login,
+    kind: "pull_request",
+    mode: "implement",
+    closeIssueOnMerge: false,
+    task: `Address the requested changes in GitHub review #${review.id}. Verify each finding against the current PR head, fix applicable findings, and explain findings that are already fixed or not applicable with concrete evidence. Preserve unrelated work and run the relevant repository checks.`,
   };
 }
 

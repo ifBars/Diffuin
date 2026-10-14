@@ -14,10 +14,13 @@ import type {
   GitHubReadSession,
   Job,
   PullRequestContext,
+  PullRequestReviewContext,
 } from "./types.js";
 import { GitWorkspace } from "./git.js";
 import { resolveArtifactIntent } from "./intent.js";
 import { JobStore } from "./store.js";
+import { canWrite } from "./mention.js";
+import { canAutomaticallyAddressReview, isDiffuinOwnedPullRequest } from "./pull-request.js";
 
 export class Worker {
   private stopped = false;
@@ -55,9 +58,11 @@ export class Worker {
     let githubReadSession: GitHubReadSession | null = null;
     let assetRipperReadSession: AssetRipperReadSession | undefined;
     let statusCommentId: number | null = null;
+    let publishedCommit: string | null = null;
     const startedAt = Date.now();
     try {
       const pullRequest = job.kind === "pull_request" ? await this.github.getPullRequest(job) : null;
+      const review = job.commentKind === "review" ? await this.loadRequestedReview(job, pullRequest) : undefined;
       const issue = pullRequest ?? await this.github.getIssue(job);
       await this.syncFindingFeedback(job);
       const baselineRoute = routeExecution(job, issue, pullRequest, this.config);
@@ -108,6 +113,7 @@ export class Worker {
           route,
           githubReadSession.repositories,
           projectMemories,
+          review,
         ),
         {
           model: route.model,
@@ -154,11 +160,18 @@ export class Worker {
       }
 
       const hasChanges = await this.workspaces.hasChanges(repository.path);
+      if (review) {
+        const current = await this.github.getPullRequest(job);
+        await this.loadRequestedReview(job, current);
+        if (current.headSha !== pullRequest?.headSha || current.headBranch !== pullRequest.headBranch) {
+          throw new Error("The PR head changed during review remediation; refusing to publish stale results. Submit a new review or request another implementation run.");
+        }
+      }
       if (!hasChanges) {
-        if (intent === "implement") {
+        if (intent === "implement" && !review) {
           throw new Error("Implementation was requested, but the agent produced no repository changes; no pull request was opened");
         }
-        let body = `${issueUpdateNotice}${rendered.body}`;
+        let body = `${review ? "I made no repository changes.\n\n" : ""}${issueUpdateNotice}${rendered.body}`;
         if (job.kind === "pull_request" && intent === "review" && rendered.inlineComments.length) {
           try {
             const externalCommentIds = await this.github.reviewPullRequest(job, "", rendered.inlineComments);
@@ -168,6 +181,7 @@ export class Worker {
           }
         }
         await this.replaceStatus(job, statusCommentId, body);
+        if (review) await this.replyToRequestedReview(job, review, body);
         this.store.finish(job.id, "succeeded");
         return;
       }
@@ -185,13 +199,16 @@ export class Worker {
         `chore(diffuin): address #${job.issueNumber}`,
         updatesExistingPullRequest ? pullRequest.headBranch : repository.branch,
       );
+      publishedCommit = commitSha;
       if (updatesExistingPullRequest) {
+        const body = `I updated this pull request with commit [\`${commitSha.slice(0, 7)}\`](https://github.com/${job.repository}/commit/${commitSha}).\n\n${rendered.body}`;
         await this.github.addReaction(job, "rocket");
         await this.replaceStatus(
           job,
           statusCommentId,
-          `I updated this pull request with commit [\`${commitSha.slice(0, 7)}\`](https://github.com/${job.repository}/commit/${commitSha}).`,
+          body,
         );
+        if (review) await this.replyToRequestedReview(job, review, body);
         this.store.finish(job.id, "succeeded");
         return;
       }
@@ -211,7 +228,7 @@ export class Worker {
       await this.replaceStatus(
         job,
         statusCommentId,
-        `I couldn't complete this request.\n\n\`${escapeInline(message)}\``,
+        `${publishedCommit ? `I pushed commit [\`${publishedCommit.slice(0, 7)}\`](https://github.com/${job.repository}/commit/${publishedCommit}), but couldn't complete delivery of the result.` : "I couldn't complete this request."}\n\n\`${escapeInline(message)}\``,
       ).catch(() => undefined);
     } finally {
       githubReadSession?.close();
@@ -219,6 +236,28 @@ export class Worker {
       if (workspacePath) {
         await this.workspaces.cleanup(workspacePath).catch(() => undefined);
       }
+    }
+  }
+
+  private async loadRequestedReview(job: Job, pullRequest: PullRequestContext | null): Promise<PullRequestReviewContext> {
+    if (!this.config.allowedRepositories.has(job.repository.toLowerCase()) ||
+        !canWrite(await this.github.getActorPermission(job)) ||
+        !canAutomaticallyAddressReview(job, pullRequest, this.config.handle)) {
+      throw new Error("Automatic review remediation requires an authorized actor and an open Diffuin-owned pull request");
+    }
+    const review = await this.github.getPullRequestReview?.(job);
+    if (!review || review.id !== job.commentId || review.actor.toLowerCase() !== job.actor.toLowerCase() ||
+        review.state.toUpperCase() !== "CHANGES_REQUESTED") {
+      throw new Error("The requested review is unavailable, dismissed, or no longer requests changes");
+    }
+    return review;
+  }
+
+  private async replyToRequestedReview(job: Job, review: PullRequestReviewContext, body: string): Promise<void> {
+    const roots = new Set(review.comments.map((comment) => comment.replyTo ?? comment.id));
+    for (const commentId of roots) {
+      if (!this.github.replyToReviewComment) throw new Error("Review thread replies are unavailable");
+      await this.github.replyToReviewComment(job, commentId, body);
     }
   }
 
@@ -261,13 +300,6 @@ export class Worker {
       await this.github.comment(job, body);
     }
   }
-}
-
-function isDiffuinOwnedPullRequest(job: Job, pullRequest: PullRequestContext | null): pullRequest is PullRequestContext {
-  return job.kind === "pull_request" && pullRequest !== null &&
-    pullRequest.headRepository.toLowerCase() === job.repository.toLowerCase() &&
-    /^diffuin\/\d+-[0-9a-f]{8}$/.test(pullRequest.headBranch) &&
-    (pullRequest.body?.includes("Diffuin job: `") ?? false);
 }
 
 function targetBranchFor(job: Job, pullRequest: PullRequestContext | null, defaultBranch: string): string {

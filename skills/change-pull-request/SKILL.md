@@ -8,6 +8,7 @@ description: Apply authorized changes to an existing Schedule One modding pull r
 Treat the latest authorized request as a code-delivery contract. Read the PR body, complete base-to-head diff, prior conversation, and relevant surrounding code before editing.
 
 1. Interpret the requested outcome from the whole message instead of relying on a fixed verb list.
+   For a submitted changes-requested review, verify every supplied finding against the current source. Identify each disposition by comment ID, explain false positives or already-fixed findings with evidence, and fix only applicable findings. If no changes are needed, leave the worktree unchanged and return the explanation.
 2. Start from the checked-out PR head and preserve the PR's existing intent, base-branch compatibility, and unrelated work.
 3. Make only the requested changes and the smallest supporting test or documentation updates needed for correctness.
 4. Run focused validation first, followed by the appropriate repository build and test gates.
