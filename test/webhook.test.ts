@@ -41,11 +41,11 @@ describe("parseWorkRequest", () => {
     const result = parseWorkRequest("issue_comment", "delivery", payload, "Diffuin");
     assert.equal(result?.kind, "pull_request");
     assert.equal(result?.task, "fix the null dereference");
-    assert.equal(result?.mode, "implement");
+    assert.equal(result?.mode, "auto");
     assert.equal(result?.repository, "octo-org/example-repo");
   });
 
-  it("routes a compound issue investigation to its requested plan deliverable", () => {
+  it("passes compound issue requests through without inferring a mode", () => {
     const result = parseWorkRequest("issue_comment", "delivery", {
       ...payload,
       issue: { number: 260 },
@@ -56,7 +56,7 @@ describe("parseWorkRequest", () => {
     }, "Diffuin");
 
     assert.equal(result?.kind, "issue");
-    assert.equal(result?.mode, "plan");
+    assert.equal(result?.mode, "auto");
     assert.equal(result?.task, "Investigate this issue deeply and create a plan to fix it");
   });
 

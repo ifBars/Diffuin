@@ -3,48 +3,31 @@ import { describe, it } from "node:test";
 import { canWrite, parseMention } from "../src/mention.js";
 
 describe("parseMention", () => {
-  it("extracts a task case-insensitively", () => {
+  it("preserves natural-language requests without classifying their intent", () => {
+    for (const task of [
+      "Do a new investigative plan on the latest and open a new PR",
+      "review this pull request and fix the regression",
+      "Investigate this issue deeply and create a plan to fix it",
+      "Could you create a plan for this issue?",
+      "How do I fix the null dereference?",
+      "Why does this fail? Please fix the regression.",
+      "onboard this repository",
+      "write a release announcement and suggest a title",
+      "take a look at this",
+    ]) {
+      assert.deepEqual(parseMention(`@Diffuin ${task}`, "Diffuin"), { task, mode: "auto" });
+    }
     assert.deepEqual(parseMention("@diffuin, please fix the failing test", "Diffuin"), {
-      task: "please fix the failing test",
-      mode: "implement",
+      task: "please fix the failing test", mode: "auto",
     });
   });
 
-  it("uses the final deliverable in compound natural-language requests", () => {
-    assert.deepEqual(
-      parseMention("@Diffuin Investigate this issue deeply and create a plan to fix it", "Diffuin"),
-      {
-        task: "Investigate this issue deeply and create a plan to fix it",
-        mode: "plan",
-      },
-    );
-    assert.equal(parseMention("@Diffuin review this pull request and fix the regression", "Diffuin")?.mode, "implement");
-  });
-
-  it("keeps explicit option-bearing commands strict", () => {
-    assert.equal(
-      parseMention("@Diffuin investigate -- research whether a plan is needed", "Diffuin")?.mode,
-      "investigate",
-    );
-  });
-
-  it("distinguishes polite requests from questions about an action", () => {
-    assert.equal(parseMention("@Diffuin Could you create a plan for this issue?", "Diffuin")?.mode, "plan");
-    assert.equal(parseMention("@Diffuin Can you fix the null dereference?", "Diffuin")?.mode, "implement");
-    assert.equal(parseMention("@Diffuin How do I fix the null dereference?", "Diffuin")?.mode, "answer");
-    assert.equal(parseMention("@Diffuin Should we create a plan before changing this?", "Diffuin")?.mode, "answer");
-    assert.equal(parseMention("@Diffuin Should we investigate this and fix it?", "Diffuin")?.mode, "answer");
-    assert.equal(parseMention("@Diffuin Why does this fail? Please fix the regression.", "Diffuin")?.mode, "implement");
-  });
-
-  it("leaves ambiguous natural-language requests for semantic interpretation", () => {
-    assert.equal(parseMention("@Diffuin take a look at this", "Diffuin")?.mode, "auto");
-  });
-
-  it("treats repository onboarding and AGENTS.md maintenance as implementation", () => {
-    assert.equal(parseMention("@Diffuin onboard this repository", "Diffuin")?.mode, "implement");
-    assert.equal(parseMention("@Diffuin audit our AGENTS.md", "Diffuin")?.mode, "implement");
-    assert.equal(parseMention("@Diffuin promote approved lessons into AGENTS.md", "Diffuin")?.mode, "implement");
+  it("supports model and effort options without selecting a task mode", () => {
+    const command = parseMention("@Diffuin --model gpt-6.1-sol --effort high -- Do a new plan and open a PR", "Diffuin");
+    assert.equal(command?.mode, "auto");
+    assert.equal(command?.task, "Do a new plan and open a PR");
+    assert.equal(command?.requestedModel, "gpt-6.1-sol");
+    assert.equal(command?.requestedReasoningEffort, "high");
   });
 
   it("parses explicit model and effort overrides", () => {

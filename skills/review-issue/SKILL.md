@@ -28,7 +28,7 @@ Use complete sentences. Never let a field end mid-sentence. Do not repeat the sa
 
 - Define the contract and compatibility boundary before naming new public types or files.
 - Propose exact API names only when repository patterns and native seams support them; otherwise make the unresolved choice an implementation gate.
-- Keep plans implementation-ready but bounded: confirmed evidence, at most three decisions, at most four phases, and only material open questions.
+- Scale plans to the requested scope: confirmed evidence, concrete decisions and phases, and only material open questions.
 - Cover Mono/IL2CPP, persistence, multiplayer authority, lifecycle, and assets only when the feature touches them.
 
-Do not modify repository files in this workflow.
+For a research-only request, do not modify repository files. If the authorized request also asks for implementation, continue with the relevant implementation workflow after the investigation; this skill does not limit the overall request.

@@ -1,45 +1,30 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { artifactSchema } from "../src/artifact.js";
-import { resolveArtifactIntent, workflowFor } from "../src/intent.js";
+import { assertPublicationAllowed, requestsPublication } from "../src/intent.js";
 
-const artifact = artifactSchema.parse({
-  intent: "answer",
-  workflow: "none",
-  kind: "response",
-  verdict: "not_applicable",
-  confidence: "high",
-  summary: "The fallback preserves compatibility with older saves.",
-  findings: [],
-  evidence: [],
-  designChoices: [],
-  phases: [],
-  validationPerformed: [],
-  validationRemaining: [],
-  openQuestions: [],
-  pullRequestTitle: "",
-  closesIssue: false,
-  issuePolish: { needed: false, title: "", body: "", reason: "" },
-});
-
-describe("agent intent policy", () => {
-  it("allows an auto request to resolve to a focused answer", () => {
-    assert.equal(resolveArtifactIntent("pull_request", "auto", artifact), "answer");
+describe("publication policy", () => {
+  it("accepts a generic response without intent or kind labels", () => {
+    const artifact = artifactSchema.parse({ body: "Here is the plan and the result.", publishChanges: true });
+    assert.doesNotThrow(() => assertPublicationAllowed("auto", artifact));
+    assert.equal(requestsPublication(artifact), true);
   });
 
-  it("maps PR changes to the dedicated change workflow", () => {
-    assert.equal(workflowFor("pull_request", "implement"), "change-pull-request");
-    assert.equal(workflowFor("issue", "implement"), "implement-issue");
+  it("allows arbitrary response labels without making them publication authority", () => {
+    const artifact = artifactSchema.parse({ body: "A mixed response.", intent: "anything", kind: "custom", workflow: "none", publishChanges: true });
+    assert.doesNotThrow(() => assertPublicationAllowed("implement", artifact));
   });
 
-  it("rejects intent that conflicts with an explicit mode", () => {
-    assert.throws(() => resolveArtifactIntent("pull_request", "review", artifact), /explicit review request as answer/);
+  it("rejects publication under explicit read-only commands", () => {
+    const artifact = artifactSchema.parse({ body: "Changed files.", publishChanges: true });
+    for (const mode of ["review", "investigate", "plan", "answer"] as const) {
+      assert.throws(() => assertPublicationAllowed(mode, artifact), /read-only/);
+    }
   });
 
-  it("rejects a workflow that does not match the interpreted intent", () => {
-    assert.throws(
-      () => resolveArtifactIntent("pull_request", "auto", { ...artifact, intent: "implement", workflow: "none" }),
-      /expected change-pull-request/,
-    );
+  it("honors an explicit no-publish decision even on legacy implementation artifacts", () => {
+    const artifact = artifactSchema.parse({ summary: "Not ready.", intent: "implement", publishChanges: false });
+    assert.equal(requestsPublication(artifact), false);
+    assert.throws(() => assertPublicationAllowed("auto", artifact), /without requesting publication/);
   });
 });

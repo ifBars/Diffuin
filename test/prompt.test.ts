@@ -78,7 +78,7 @@ describe("buildPrompt", () => {
       ["ifBars/S1API", "ifBars/MoreDrugs"],
     );
 
-    assert.match(prompt, /Schedule One modding review and issue-planning agent/);
+    assert.match(prompt, /repository agent with Schedule One modding evidence/);
     assert.match(prompt, /Use first person only when it naturally describes your own actions, judgments, limits, or uncertainty/);
     assert.match(prompt, /Do not force sentences into repetitive "I will," "I found," or "I think" framing/);
     assert.match(prompt, /Read [\\/]app[\\/]skills[\\/]human-writing[\\/]SKILL\.md/);
@@ -93,7 +93,7 @@ describe("buildPrompt", () => {
     assert.match(prompt, /diffuin_assetripper/);
     assert.match(prompt, /Private AssetRipper corpus: available through read-only tools/);
     assert.doesNotMatch(prompt, /\/data\/references\/assetripper/);
-    assert.match(prompt, /For `answer`, `review`, `investigate`, and `plan` intents, do not edit repository files/);
+    assert.match(prompt, /This explicit command is read-only: do not edit files or request publication/);
     assert.match(prompt, /shortest complete implementation/);
     assert.match(prompt, /prefer fewer changed lines, files, branches, helpers, and abstractions/);
     assert.match(prompt, /preserve the native member's identity and null semantics/);
@@ -144,12 +144,13 @@ describe("buildPrompt", () => {
 
     assert.match(prompt, /How does x work in this PR\?/);
     assert.match(prompt, /Interpret the authorized request by meaning and context, not by matching a fixed verb list/);
-    assert.match(prompt, /`review-pull-request`:/);
-    assert.match(prompt, /`change-pull-request`:/);
-    assert.match(prompt, /`none`: focused read-only questions/);
-    assert.match(prompt, /Always return `intent`/);
-    assert.match(prompt, /A question about how or why code works is normally `answer`/);
-    assert.match(prompt, /A request to alter code, regardless of phrasing, is `implement`/);
+    assert.match(prompt, /Optional task workflows/);
+    assert.match(prompt, /review-pull-request/);
+    assert.match(prompt, /change-pull-request/);
+    assert.match(prompt, /complete user-facing response as Markdown/);
+    assert.match(prompt, /No intent, kind, or workflow labels are required/);
+    assert.doesNotMatch(prompt, /This explicit mode is a hard constraint|Always return `intent`|Return kind/);
+
   });
 
   it("runs the same repository workflow without Schedule One coupling in the general profile", async () => {

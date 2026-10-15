@@ -17,7 +17,7 @@ import type {
   PullRequestReviewContext,
 } from "./types.js";
 import { GitWorkspace } from "./git.js";
-import { resolveArtifactIntent } from "./intent.js";
+import { assertPublicationAllowed, requestsPublication } from "./intent.js";
 import { JobStore } from "./store.js";
 import { canWrite } from "./mention.js";
 import { canAutomaticallyAddressReview, isDiffuinOwnedPullRequest } from "./pull-request.js";
@@ -74,7 +74,11 @@ export class Worker {
       );
 
       const defaultBranch = await this.github.getDefaultBranch(job);
-      const targetBranch = targetBranchFor(job, pullRequest, defaultBranch);
+      let targetBranch = targetBranchFor(job, pullRequest, defaultBranch);
+      if (!pullRequest && targetBranch !== defaultBranch && this.github.hasBranch &&
+          !await this.github.hasBranch(job, targetBranch)) {
+        targetBranch = defaultBranch;
+      }
       const sourceRef = pullRequest?.headSha ?? targetBranch;
       const token = await this.github.getInstallationToken(job);
       const repository = await this.workspaces.prepare({
@@ -114,6 +118,7 @@ export class Worker {
           githubReadSession.repositories,
           projectMemories,
           review,
+          targetBranch,
         ),
         {
           model: route.model,
@@ -133,22 +138,19 @@ export class Worker {
         profileId: profile.id,
         threadId: result.threadId,
       });
-      const intent = resolveArtifactIntent(job.kind, route.mode, artifact);
-      const expectedKind = intent === "review" ? "review" : intent === "plan" ? "plan" : "response";
-      if (artifact.kind !== expectedKind) {
-        throw new Error(`Agent returned ${artifact.kind} output for ${intent} intent`);
-      }
-      const rendered = renderArtifact(artifact, { ...route, mode: intent }, {
+      const publishChanges = requestsPublication(artifact);
+      const rendered = renderArtifact(artifact, route, {
         threadId: result.threadId,
         ...(result.provider ? { provider: result.provider } : {}),
         elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
         includeImplementationAction:
-          job.kind === "issue" && (intent === "investigate" || intent === "plan"),
+          job.kind === "issue" && !publishChanges &&
+          (artifact.offerImplementation ?? (artifact.intent === "investigate" || artifact.intent === "plan")),
       });
       assertNoSecrets(rendered.body);
 
       let issueUpdateNotice = "";
-      if (job.kind === "issue" && intent !== "implement" && artifact.issuePolish.needed) {
+      if (job.kind === "issue" && !publishChanges && artifact.issuePolish.needed) {
         const title = artifact.issuePolish.title.trim();
         const body = artifact.issuePolish.body.trim();
         if (!title || !body) {
@@ -168,11 +170,10 @@ export class Worker {
         }
       }
       if (!hasChanges) {
-        if (intent === "implement" && !review) {
-          throw new Error("Implementation was requested, but the agent produced no repository changes; no pull request was opened");
-        }
-        let body = `${review ? "I made no repository changes.\n\n" : ""}${issueUpdateNotice}${rendered.body}`;
-        if (job.kind === "pull_request" && intent === "review" && rendered.inlineComments.length) {
+        const noChangesNotice = review ? "I made no repository changes.\n\n"
+          : publishChanges ? "No repository changes were produced, so no commit or pull request was created.\n\n" : "";
+        let body = `${noChangesNotice}${issueUpdateNotice}${rendered.body}`;
+        if (job.kind === "pull_request" && !publishChanges && rendered.inlineComments.length) {
           try {
             const externalCommentIds = await this.github.reviewPullRequest(job, "", rendered.inlineComments);
             this.store.recordDeliveredFindings?.(job.id, artifact, externalCommentIds);
@@ -186,8 +187,10 @@ export class Worker {
         return;
       }
 
-      if (intent !== "implement") {
-        throw new Error(`The agent modified files during a read-only ${intent} request; refusing to publish the patch`);
+      assertPublicationAllowed(job.mode, artifact);
+      if (!this.config.allowedRepositories.has(job.repository.toLowerCase()) ||
+          !canWrite(await this.github.getActorPermission(job))) {
+        throw new Error("Publication requires an allowlisted repository and a write-authorized actor");
       }
 
       const patch = await this.workspaces.readPatch(repository.path);
@@ -312,9 +315,10 @@ function targetBranchFor(job: Job, pullRequest: PullRequestContext | null, defau
 }
 
 function requestedTargetBranch(task: string): string | null {
-  const match = task.match(/\b(?:against|into|target(?:ing)?)\s+(?:the\s+)?(?:branch\s+)?[`'"]?([A-Za-z0-9][A-Za-z0-9._/-]{0,100})/i);
+  const match = task.match(/\b(?:against|into|target(?:ing)?)\s+(?:the\s+)?(?:(?:latest|current)\s+)?(?:branch\s+)?[`'"]?([A-Za-z0-9][A-Za-z0-9._/-]{0,100})/i);
   const branch = match?.[1];
-  if (!branch || branch.includes("..") || branch.endsWith("/") || branch.endsWith(".lock")) {
+  if (!branch || /^(?:latest|current|default|new|existing|branch)$/i.test(branch) ||
+      branch.includes("..") || branch.endsWith("/") || branch.endsWith(".lock")) {
     return null;
   }
   return branch;

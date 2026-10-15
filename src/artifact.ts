@@ -24,19 +24,22 @@ const phaseSchema = z.object({
 });
 
 export const artifactSchema = z.object({
-  intent: z.enum(["review", "investigate", "plan", "implement", "answer"]),
-  workflow: z.enum(["review-pull-request", "change-pull-request", "review-issue", "implement-issue", "none"]),
-  kind: z.enum(["review", "plan", "response"]),
-  verdict: z.enum(["approve", "comment", "changes_requested", "not_applicable"]),
-  confidence: z.enum(["low", "medium", "high"]),
-  summary: z.string().min(1).max(2_000),
-  findings: z.array(findingSchema).max(6),
-  evidence: z.array(z.string().max(1_000)).max(4),
-  designChoices: z.array(z.string().max(1_000)).max(3),
-  phases: z.array(phaseSchema).max(4),
-  validationPerformed: z.array(z.string().max(800)).max(4),
-  validationRemaining: z.array(z.string().max(800)).max(4),
-  openQuestions: z.array(z.string().max(800)).max(3),
+  body: z.string().min(1).optional(),
+  publishChanges: z.boolean().optional(),
+  offerImplementation: z.boolean().optional(),
+  intent: z.string().default("answer"),
+  workflow: z.string().default("none"),
+  kind: z.string().default("response"),
+  verdict: z.enum(["approve", "comment", "changes_requested", "not_applicable"]).default("not_applicable"),
+  confidence: z.enum(["low", "medium", "high"]).default("medium"),
+  summary: z.string().min(1).max(2_000).default(""),
+  findings: z.array(findingSchema).max(6).default([]),
+  evidence: z.array(z.string().max(1_000)).max(4).default([]),
+  designChoices: z.array(z.string().max(1_000)).max(3).default([]),
+  phases: z.array(phaseSchema).max(4).default([]),
+  validationPerformed: z.array(z.string().max(800)).max(4).default([]),
+  validationRemaining: z.array(z.string().max(800)).max(4).default([]),
+  openQuestions: z.array(z.string().max(800)).max(3).default([]),
   pullRequestTitle: z.string().max(120).default(""),
   closesIssue: z.boolean().default(false),
   issuePolish: z.object({
@@ -45,6 +48,8 @@ export const artifactSchema = z.object({
     body: z.string().max(20_000),
     reason: z.string().max(1_000),
   }).default({ needed: false, title: "", body: "", reason: "" }),
+}).refine((artifact) => Boolean(artifact.body || artifact.summary.trim()), {
+  message: "Agent response must contain a body or legacy summary",
 });
 
 export type DiffuinArtifact = z.infer<typeof artifactSchema>;
@@ -52,20 +57,11 @@ export type DiffuinArtifact = z.infer<typeof artifactSchema>;
 export const artifactOutputSchema = {
   type: "object",
   additionalProperties: false,
-  required: [
-    "intent", "workflow", "kind", "verdict", "confidence", "summary", "findings", "evidence", "designChoices",
-    "phases", "validationPerformed", "validationRemaining", "openQuestions", "pullRequestTitle", "closesIssue", "issuePolish",
-  ],
+  required: ["body", "publishChanges", "offerImplementation", "findings", "pullRequestTitle", "closesIssue", "issuePolish"],
   properties: {
-    intent: { type: "string", enum: ["review", "investigate", "plan", "implement", "answer"] },
-    workflow: {
-      type: "string",
-      enum: ["review-pull-request", "change-pull-request", "review-issue", "implement-issue", "none"],
-    },
-    kind: { type: "string", enum: ["review", "plan", "response"] },
-    verdict: { type: "string", enum: ["approve", "comment", "changes_requested", "not_applicable"] },
-    confidence: { type: "string", enum: ["low", "medium", "high"] },
-    summary: { type: "string" },
+    body: { type: "string", minLength: 1 },
+    publishChanges: { type: "boolean" },
+    offerImplementation: { type: "boolean" },
     findings: {
       type: "array",
       maxItems: 6,
@@ -83,37 +79,6 @@ export const artifactOutputSchema = {
         },
       },
     },
-    evidence: { type: "array", maxItems: 4, items: { type: "string" } },
-    designChoices: { type: "array", maxItems: 3, items: { type: "string" } },
-    phases: {
-      type: "array",
-      maxItems: 4,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["title", "objective", "tasks"],
-        properties: {
-          title: { type: "string" },
-          objective: { type: "string" },
-          tasks: {
-            type: "array",
-            maxItems: 4,
-            items: {
-              type: "object",
-              additionalProperties: false,
-              required: ["description", "files"],
-              properties: {
-                description: { type: "string" },
-                files: { type: "array", maxItems: 4, items: { type: "string" } },
-              },
-            },
-          },
-        },
-      },
-    },
-    validationPerformed: { type: "array", maxItems: 4, items: { type: "string" } },
-    validationRemaining: { type: "array", maxItems: 4, items: { type: "string" } },
-    openQuestions: { type: "array", maxItems: 3, items: { type: "string" } },
     pullRequestTitle: { type: "string", maxLength: 120 },
     closesIssue: { type: "boolean" },
     issuePolish: {
@@ -149,11 +114,11 @@ export function renderArtifact(
       body: `### [${finding.severity}] ${finding.title}\n\n${finding.body}\n\n**Recommended change:** ${finding.recommendation}`,
     }));
 
-  const content = artifact.kind === "plan"
+  const content = artifact.body ?? (artifact.kind === "plan"
     ? renderPlan(artifact)
     : artifact.kind === "review"
       ? renderReview(artifact)
-      : renderResponse(artifact, route);
+      : renderResponse(artifact, route));
   const implementationAction = metadata.includeImplementationAction
     ? `\n\n${renderPlanAction()}`
     : "";

@@ -91,7 +91,7 @@ describe("Diffuin artifacts", () => {
   });
 
   it("does not impose a hard JSON summary boundary that can cut a sentence", () => {
-    assert.equal("maxLength" in artifactOutputSchema.properties.summary, false);
+    assert.equal("maxLength" in artifactOutputSchema.properties.body, false);
     const artifact = parseArtifact(JSON.stringify({ ...base, summary: `${"Evidence ".repeat(100)}supports the conclusion.` }));
     assert.match(artifact.summary, /supports the conclusion\.$/);
   });

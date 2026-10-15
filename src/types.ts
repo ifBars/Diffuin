@@ -208,6 +208,7 @@ export interface GitHubPort {
     comments: Array<{ path: string; line: number; body: string }>,
   ): Promise<number[]>;
   getDefaultBranch(request: WorkRequest): Promise<string>;
+  hasBranch?(request: WorkRequest, branch: string): Promise<boolean>;
   getTrustedReferenceSha?(request: WorkRequest): Promise<string>;
   listReviewCommentReactions?(
     request: WorkRequest,

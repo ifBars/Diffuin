@@ -398,10 +398,16 @@ Supported commands are `review`, `investigate`, `plan`, `implement`, and
 `answer`. Use `--` before free-form instructions when options are present.
 Supported reasoning levels are `minimal`, `low`, `medium`, `high`, `xhigh`,
 and `max`. Invalid or disallowed overrides are rejected before a job is queued.
-For free-form mentions, Diffuin resolves clear requested deliverables before the
-run. In compound requests, implementation takes precedence over planning, and
-planning takes precedence over review or investigation. Ambiguous wording is
-left for the agent to interpret from the full request and repository context.
+Free-form mentions pass unchanged to the agent, which interprets the full request
+and conversation. Requests can combine research, planning, explanations, writing,
+and implementation without matching a verb list or declaring an intent, kind,
+or workflow. Explicit command modes remain available with `--`/options or as
+standalone shortcuts; explicit read-only commands still prevent publication.
+Model and effort overrides also work without a mode:
+
+```text
+@Diffuin --model gpt-6.1-sol --effort high -- Do a new investigative plan on the latest and open a new PR
+```
 
 Implementation remains explicit:
 
@@ -413,13 +419,14 @@ Implementation remains explicit:
 ```
 
 Diffuin reacts with eyes when the request is queued. It comments with the review
-or plan when no files changed, and posts a pull-request URL when an explicit
-implementation request produced a patch. Reviews and plans use bounded,
-structured sections instead of slicing long Markdown. Every delivered artifact
+response when no files changed, and posts a pull-request URL when an authorized
+implementation request produced a patch. The agent writes free-form Markdown
+in a small delivery envelope rather than fixed review/plan templates. Blockers
+and no-change outcomes are explained without fabricating a commit. Every delivered artifact
 ends with an AI-generated accuracy notice and includes collapsed provider,
 model, reasoning, elapsed-time, and provider-run metadata.
 
-Issue plans include an unchecked action at the end. A repository maintainer can
+Issue plans can offer an unchecked implementation action at the end. A repository maintainer can
 check it to ask Diffuin to implement that exact plan, open a pull request, and
 close the issue when the pull request merges. Each plan comment can trigger at
 most one implementation job; a failed run can still be retried with an explicit
@@ -427,9 +434,10 @@ most one implementation job; a failed run can still be retried with an explicit
 
 Diffuin includes recent issue or PR conversation in each job. Follow-up
 implementation requests therefore reuse earlier research instead of starting a
-new, potentially contradictory diagnosis. Clear natural-language deliverables
-are enforced by the application; the agent interprets only requests that remain
-ambiguous after that classification.
+new, potentially contradictory diagnosis. The agent chooses the response format
+and relevant workflows. The application owns publication: it requires a deliberate
+publish-changes signal, enforces explicit read-only commands, rechecks actor
+permission and repository allowlisting, and scans output and patches for secrets.
 
 On a pull request created by Diffuin, a direct request such as
 `@Diffuin remove the unused compatibility shim from this PR` commits and pushes

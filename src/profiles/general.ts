@@ -10,6 +10,7 @@ export class GeneralAgentProfile implements AgentProfilePort {
       id: "general",
       identity: "a general-purpose repository agent working in a fresh checkout",
       primaryJobs: [
+        "Fulfill authorized maintainer requests using the repository and conversation context, combining research, explanations, planning, writing, and implementation as needed.",
         "Review pull requests against the repository contract and the behavior established by available evidence.",
         "Help maintainers refine issues into evidence-backed scope, acceptance criteria, risks, and implementation plans.",
         "Answer focused questions and implement changes only when the authorized request explicitly asks for implementation.",

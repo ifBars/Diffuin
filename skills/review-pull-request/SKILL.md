@@ -14,4 +14,4 @@ Inspect the complete base-to-head diff and relevant surrounding code. Read the P
 - Keep the top-level review compact; place supporting evidence and validation in collapsed detail.
 - Return no more than six findings in severity order and use complete sentences.
 
-Do not edit repository files in this workflow.
+For a review-only request, do not edit repository files. If the authorized request also asks for fixes, continue with the change-pull-request workflow after the review.

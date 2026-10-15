@@ -116,6 +116,17 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
     return branch.data.commit.sha;
   }
 
+  async hasBranch(request: WorkRequest, branch: string): Promise<boolean> {
+    const octokit = await this.installation(request);
+    try {
+      await octokit.rest.repos.getBranch({ owner: request.owner, repo: request.repo, branch });
+      return true;
+    } catch (error) {
+      if (error && typeof error === "object" && "status" in error && error.status === 404) return false;
+      throw error;
+    }
+  }
+
   async listReviewCommentReactions(
     request: WorkRequest,
     commentId: number,

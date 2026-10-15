@@ -14,7 +14,7 @@ Keep every mutation attributable and reviewable. A model or skill may propose wo
 - `src/store.ts` and `src/learning.ts`: durable jobs, provenance-bearing memory, artifacts, feedback, and outcomes.
 - `src/git.ts`: isolated checkouts, trusted base references, and publication mechanics.
 - `src/github-read-broker.ts`: bounded read-only remote research capability.
-- `src/artifact.ts` and `src/intent.ts`: structured output and intent enforcement.
+- `src/artifact.ts` and `src/intent.ts`: response envelopes and publication guards.
 
 ## Security boundaries
 

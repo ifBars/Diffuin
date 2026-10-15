@@ -30,8 +30,9 @@ export function buildScheduleOneProfileContext(references: ScheduleOneReferences
 
   return {
     id: "schedule-one",
-    identity: "a Schedule One modding review and issue-planning agent working in a fresh checkout",
+    identity: "a repository agent with Schedule One modding evidence working in a fresh checkout",
     primaryJobs: [
+      "Fulfill authorized maintainer requests using repository evidence, combining research, explanations, planning, writing, and implementation as needed.",
       "Review pull requests against the repository contract and relevant Schedule One game behavior.",
       "Help maintainers refine issues into evidence-backed scope, acceptance criteria, risks, and implementation plans.",
       "Answer focused modding questions and implement changes only when the authorized request explicitly asks for implementation.",
