@@ -70,15 +70,13 @@ installation, Steam credentials, Unity runtime, or .NET build SDK is added.
 8. For pull requests, fetches the base branch so Codex can review the complete
    base-to-head diff.
 9. Scans the response and patch for common secret formats.
-10. Passes the authorized message to the selected harness, which interprets the requested
-    outcome and loads the applicable `review-issue`, `implement-issue`,
-    `review-pull-request`, or `change-pull-request` skill. Explicit command modes
-    remain hard constraints.
-11. Edits a single status comment into a compact review or plan. PR findings
+10. Passes the authorized message to the selected harness, which interprets the full
+    request and uses relevant task skills when helpful. Explicit read-only commands
+    constrain publication, without imposing intent labels or response templates.
+11. Edits a single status comment into the agent's Markdown response. PR findings
     are posted on the relevant diff lines when GitHub accepts the location.
-12. Publishes changes only when the harness declares implementation intent and the
-    checkout actually changed. Read-only answers, reviews, investigations, and
-    plans refuse to publish patches.
+12. Publishes only deliberate patches when the agent requests publication, the
+    command permits it, and repository and actor authorization still pass.
 
 Diffuin does not have Schedule One or Unity. It must not claim in-game,
 Play Mode, Mono runtime, IL2CPP runtime, multiplayer, save/load, or full
@@ -118,7 +116,7 @@ Pull-request requests such as `quick review`, `fast PR
 review`, `review this quickly`, or `take a quick pass over this` select the
 configured Spark model. An explicit `--model` always wins over that shortcut.
 Both providers return the same structured artifact and go through the same
-secret scan, intent validation, read-only-change guard, and GitHub delivery path.
+secret scan, publication guards, and GitHub delivery path.
 
 ## GitHub App setup
 
