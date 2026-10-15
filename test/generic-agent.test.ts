@@ -26,7 +26,7 @@ const envelope = {
 };
 
 async function execute(options: {
-  output?: object; changes?: boolean; mode?: Job["mode"]; permission?: string; task?: string;
+  output?: object; changes?: boolean; mode?: Job["mode"]; permission?: string; task?: string; patch?: string;
 } = {}) {
   const optionsOutput = options.output ?? envelope;
   const taskText = options.task ?? task;
@@ -37,6 +37,7 @@ async function execute(options: {
   let response = "";
   let prBody = "";
   let sourceRef = "";
+  let retainedPatch = "";
   const github: GitHubPort = {
     getActorPermission: async () => options.permission ?? "write",
     addReaction: async () => undefined, comment: async () => 91,
@@ -54,10 +55,13 @@ async function execute(options: {
       return { path: "C:/temp/work", branch: "diffuin/294-abcdef12", remoteUrl: "https://example.test/repo.git" };
     },
     readRepositoryGuidance: async () => [], currentRevision: async () => "head",
-    hasChanges: async () => options.changes ?? true, readPatch: async () => "diff --git a/Seat.cs b/Seat.cs",
+    hasChanges: async () => options.changes ?? true, readPatch: async () => options.patch ?? "diff --git a/Seat.cs b/Seat.cs",
     commitAndPush: async () => { pushed = true; return "abc123456789"; }, cleanup: async () => undefined,
   } as unknown as GitWorkspace;
-  const store = { finish: (_id: string, result: string, message?: string) => { status = result; error = message ?? ""; } } as unknown as JobStore;
+  const store = {
+    finish: (_id: string, result: string, message?: string) => { status = result; error = message ?? ""; },
+    saveUnpublishedPatch: (_id: string, patch: string) => { retainedPatch = patch; },
+  } as unknown as JobStore;
   const config = {
     handle: "Diffuin", allowedRepositories: new Set(["octo/repo"]), autoReasoningRouting: false,
     codexModel: "gpt-6.1-sol", codexReasoningEffort: "high", sparkModels: new Set(),
@@ -72,7 +76,7 @@ async function execute(options: {
   }, workspaces, new GeneralAgentProfile("C:/skills"), {
     openSession: () => ({ url: "http://localhost/mcp", token: "read", repositories: [], close: () => undefined }),
   }, { openSession: async () => undefined }).process({ ...job, task: taskText, mode: options.mode ?? job.mode });
-  return { status, error, pushed, opened, response, prBody, sourceRef };
+  return { status, error, pushed, opened, response, prBody, sourceRef, retainedPatch };
 
 }
 
@@ -122,11 +126,16 @@ describe("generic agent delivery", () => {
     assert.equal(result.opened, false);
   });
 
-  it("does not publish incidental changes or let legacy labels override the delivery flag", async () => {
-    const result = await execute({ output: { ...envelope, publishChanges: false, intent: "implement" } });
-    assert.equal(result.status, "failed");
-    assert.match(result.error, /without requesting publication/);
+  it("delivers the blocker report and retains a withheld patch without letting legacy labels force publication", async () => {
+    const body = "Prepared a local implementation. Publication is blocked by missing IL2CPP hook evidence and build validation.";
+    const result = await execute({ output: { ...envelope, body, publishChanges: false, intent: "implement" } });
+    assert.equal(result.status, "succeeded");
+    assert.ok(result.response.includes(body));
+    assert.match(result.response, /No changes were published/);
+    assert.match(result.response, /retained with Diffuin run/);
+    assert.match(result.retainedPatch, /diff --git/);
     assert.equal(result.pushed, false);
+    assert.equal(result.opened, false);
   });
 
   it("rechecks actor authorization before publication", async () => {
@@ -134,6 +143,21 @@ describe("generic agent delivery", () => {
     assert.equal(result.status, "failed");
     assert.match(result.error, /write-authorized actor/);
     assert.equal(result.pushed, false);
+  });
+
+  it("does not retain a withheld patch containing credential material", async () => {
+    const result = await execute({ output: { ...envelope, publishChanges: false }, patch: "-----BEGIN PRIVATE KEY-----" });
+    assert.equal(result.status, "failed");
+    assert.match(result.error, /private key/);
+    assert.equal(result.retainedPatch, "");
+    assert.equal(result.pushed, false);
+  });
+
+  it("still rejects changes made during a read-only command even if publication is declined", async () => {
+    const result = await execute({ mode: "answer", output: { ...envelope, publishChanges: false } });
+    assert.equal(result.status, "failed");
+    assert.match(result.error, /read-only answer/);
+    assert.equal(result.retainedPatch, "");
   });
 
   it("preserves arbitrary Markdown without fixed sections or a summary-size limit", () => {

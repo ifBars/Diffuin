@@ -424,6 +424,12 @@ and no-change outcomes are explained without fabricating a commit. Every deliver
 ends with an AI-generated accuracy notice and includes collapsed provider,
 model, reasoning, elapsed-time, and provider-run metadata.
 
+If an implementation leaves a draft but declines publication, Diffuin delivers
+the agent's blocker report and keeps the secret-scanned patch in the run artifact's
+`unpublished_patch` column. It does not commit the draft or replace the explanation
+with a generic publication error. Operators can retrieve the patch from the
+persistent SQLite database using the run ID shown in the response.
+
 Issue plans can offer an unchecked implementation action at the end. A repository maintainer can
 check it to ask Diffuin to implement that exact plan, open a pull request, and
 close the issue when the pull request merges. Each plan comment can trigger at

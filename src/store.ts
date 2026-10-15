@@ -145,6 +145,7 @@ export class JobStore {
     this.ensureTableColumn("run_artifacts", "reasoning_effort", "TEXT");
     this.ensureTableColumn("run_artifacts", "profile_id", "TEXT");
     this.ensureTableColumn("run_artifacts", "thread_id", "TEXT");
+    this.ensureTableColumn("run_artifacts", "unpublished_patch", "TEXT");
     this.ensureTableColumn("delivered_findings", "last_feedback_sync", "TEXT");
     this.ensureTableColumn("feedback_events", "body", "TEXT");
   }
@@ -304,6 +305,13 @@ export class JobStore {
       metadata.threadId ?? null,
       new Date().toISOString(),
     );
+  }
+
+  saveUnpublishedPatch(jobId: string, patch: string): void {
+    const result = this.database.prepare(
+      "UPDATE run_artifacts SET unpublished_patch = ? WHERE job_id = ?",
+    ).run(patch, jobId);
+    if (result.changes !== 1) throw new Error("Cannot retain the unpublished patch without its run artifact");
   }
 
   recordDeliveredFindings(jobId: string, artifact: DiffuinArtifact, externalCommentIds: readonly number[]): void {

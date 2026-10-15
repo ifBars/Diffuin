@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import { JobStore } from "../src/store.js";
 import type { DiffuinArtifact } from "../src/artifact.js";
+import { artifactSchema } from "../src/artifact.js";
 import type { WorkRequest } from "../src/types.js";
 
 const directories: string[] = [];
@@ -34,6 +35,26 @@ const request: WorkRequest = {
 };
 
 describe("JobStore", () => {
+  it("retains an unpublished patch with its source and response across restart", () => {
+    const directory = mkdtempSync(join(tmpdir(), "diffuin-test-"));
+    directories.push(directory);
+    const path = join(directory, "jobs.sqlite");
+    const store = new JobStore(path);
+    const job = store.enqueue(request)!;
+    store.saveArtifact(job, artifactSchema.parse({ body: "Blocked on wrapper evidence.", publishChanges: false }), "base-sha", 77);
+    const patch = "diff --git a/Seat.cs b/Seat.cs\n+public sealed class Seat {}\n";
+    store.saveUnpublishedPatch(job.id, patch);
+    assert.throws(() => store.saveUnpublishedPatch("missing-job", patch), /without its run artifact/);
+    store.close();
+    const reopened = new JobStore(path);
+    reopened.close();
+    const database = new Database(path, { readonly: true });
+    const row = database.prepare("SELECT unpublished_patch,source_sha,artifact_json FROM run_artifacts WHERE job_id = ?").get(job.id) as { unpublished_patch: string; source_sha: string; artifact_json: string };
+    assert.equal(row.unpublished_patch, patch);
+    assert.equal(row.source_sha, "base-sha");
+    assert.equal(JSON.parse(row.artifact_json).body, "Blocked on wrapper evidence.");
+    database.close();
+  });
   it("persists review triggers through restart and deduplicates the review identity", () => {
     const directory = mkdtempSync(join(tmpdir(), "diffuin-test-"));
     directories.push(directory);

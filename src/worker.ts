@@ -169,8 +169,16 @@ export class Worker {
           throw new Error("The PR head changed during review remediation; refusing to publish stale results. Submit a new review or request another implementation run.");
         }
       }
-      if (!hasChanges) {
-        const noChangesNotice = review ? "I made no repository changes.\n\n"
+      if (hasChanges && !publishChanges) {
+        if (job.mode !== "auto" && job.mode !== "implement") assertPublicationAllowed(job.mode, artifact);
+        const patch = await this.workspaces.readPatch(repository.path);
+        assertNoSecrets(patch);
+        this.store.saveUnpublishedPatch(job.id, patch);
+      }
+      if (!hasChanges || !publishChanges) {
+        const noChangesNotice = hasChanges
+          ? `No changes were published. The unpublished patch is retained with Diffuin run \`${job.id}\`.\n\n`
+          : review ? "I made no repository changes.\n\n"
           : publishChanges ? "No repository changes were produced, so no commit or pull request was created.\n\n" : "";
         let body = `${noChangesNotice}${issueUpdateNotice}${rendered.body}`;
         if (job.kind === "pull_request" && !publishChanges && rendered.inlineComments.length) {
