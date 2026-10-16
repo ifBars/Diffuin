@@ -5,6 +5,7 @@ import type { Config } from "./config.js";
 import { sanitizedEnvironment } from "./environment.js";
 import { assertNoSecrets } from "./secrets.js";
 import type { GitHubPort, IssueContext, WorkRequest } from "./types.js";
+import { checkIssueTemplate, issueTemplatePath } from "./issue-template.js";
 
 const labelName = z.string().min(1).max(100);
 const policySchema = z.object({
@@ -14,6 +15,8 @@ const policySchema = z.object({
   severityLabels: z.object({ low: labelName, medium: labelName, high: labelName, critical: labelName }).strict(),
   topicLabels: z.array(labelName).max(100).default([]),
   model: z.string().min(1).default("gpt-6-luna"),
+  assignees: z.array(z.string().regex(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/)).max(10).default([]),
+  templates: z.object({ bug: issueTemplatePath, feature: issueTemplatePath }).strict().optional(),
 }).strict();
 
 export type TriagePolicy = z.infer<typeof policySchema>;
@@ -114,14 +117,25 @@ export async function runIssueTriage(config: Config, github: GitHubPort, request
   const decision = decisionSchema.parse(JSON.parse(response));
   const latest = await github.getIssue(request);
   if (latest.state !== "open" || latest.isPullRequest || latest.title !== issue.title || latest.body !== issue.body ||
-      JSON.stringify(latest.comments) !== JSON.stringify(issue.comments) || JSON.stringify(latest.labels) !== JSON.stringify(issue.labels)) {
+      JSON.stringify(latest.comments) !== JSON.stringify(issue.comments) || JSON.stringify(latest.labels) !== JSON.stringify(issue.labels) ||
+      JSON.stringify(latest.assignees) !== JSON.stringify(issue.assignees)) {
     return { status: "stale", decision };
   }
   const patch = triagePatch(latest, decision, policy, labels.map((label) => label.name));
-  if (!patch || (patch.title === latest.title && !patch.addLabels.length)) return { status: "unchanged", decision };
+  if (!patch) return { status: "unchanged", decision };
+  const assignees = policy.assignees.filter((login) => !(latest.assignees ?? []).some((current) => current.toLowerCase() === login.toLowerCase()));
+  let templateCheck: ReturnType<typeof checkIssueTemplate> | undefined;
+  const templatePath = decision.kind === "other" ? undefined : policy.templates?.[decision.kind];
+  if (templatePath && github.readIssueTemplate) {
+    try { templateCheck = checkIssueTemplate(await github.readIssueTemplate(request, templatePath), latest.body); }
+    catch { templateCheck = { status: "unknown", missing: [] }; }
+  }
   assertNoSecrets(patch.title);
-  await github.applyIssueTriage(request, { ...patch, expected: latest });
-  return { status: "applied", decision, patch };
+  const metadataChanged = patch.title !== latest.title || patch.addLabels.length > 0 || assignees.length > 0;
+  if (metadataChanged) await github.applyIssueTriage(request, { ...patch, assignees, expected: latest });
+  const reminderPosted = templatePath && templateCheck?.status === "incomplete" && decision.kind !== "other"
+    ? await github.remindIssueTemplate?.(request, decision.kind, templatePath, latest.body) ?? false : false;
+  return { status: metadataChanged || reminderPosted ? "applied" : "unchanged", decision, patch, assignees, templateCheck, reminderPosted };
 }
 
 function createTriageRunner(config: Config, policy: TriagePolicy): TriageRunner {

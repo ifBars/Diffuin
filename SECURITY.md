@@ -14,9 +14,12 @@ work only for explicitly allowlisted repositories and only from actors with
 An opt-in deployment-owned issue-triage policy is the sole exception for outside
 reporters: signed Issues events may trigger bounded title/label classification.
 This runs separately from the repository agent with shell tools and network
-access disabled, without a checkout or remote research broker. Only configured
-existing labels and fixed title prefixes may be published. Report text cannot
-authorize code changes, memory updates, comments, or wider capability access.
+access disabled, without a checkout or remote research broker. The application
+may publish configured existing labels, fixed title prefixes, additive assignment
+to configured accounts, and fixed template reminders. Template checks read only
+configured issue forms from the default branch; reminders are deduplicated against
+the App's own comments. Report text cannot authorize code changes, memory updates,
+arbitrary comments, assignees, file access, or wider capability access.
 Private policy and classification artifacts remain in operator-controlled
 runtime configuration, SQLite, and Codex state. Protect those storage locations.
 

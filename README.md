@@ -156,7 +156,12 @@ the public repository and image. Other operators can supply their own policy:
       "low": "Low", "medium": "Medium", "high": "High", "critical": "Critical"
     },
     "topicLabels": ["documentation"],
-    "model": "gpt-6-luna"
+    "model": "gpt-6-luna",
+    "assignees": ["your-maintainer-login"],
+    "templates": {
+      "bug": ".github/ISSUE_TEMPLATE/bug_report.yml",
+      "feature": ".github/ISSUE_TEMPLATE/feature_request.yml"
+    }
   }
 }
 ```
@@ -174,6 +179,20 @@ application validates its structured response and adds `[BUG]` or `[FEATURE]`
 plus configured existing labels only at high confidence. Features receive no new
 bug severity. Existing severity labels and conflicting type classifications are
 preserved as maintainer overrides. Uncertain classifications leave metadata alone.
+Optional `assignees` are added at that same confidence threshold, including on
+already-labeled reports, while preserving existing assignees.
+
+Optional `templates` enable checks against the configured YAML issue forms on the
+repository's current default branch. Diffuin compares required form sections and
+mandatory checkboxes with the issue body; GitHub does not provide reliable proof
+of which template the reporter selected. Missing sections, unanswered required
+fields, and unchecked required checkboxes produce a short fixed reminder with
+the matching form link. Optional fields are not required. Missing, malformed, or
+unsupported templates suppress the reminder. Template completeness does not alter
+severity. Only high-confidence bug/feature classifications can post reminders;
+existing conflicting classifications still prevent automatic delivery. Each
+report type gets at most one reminder from this App, even across edits and retries.
+Assignment and template checks are disabled unless configured privately.
 
 Diffuin preserves the issue body and unrelated labels, rechecks the report before
 delivery, and never posts the private rationale as an issue comment. Decisions

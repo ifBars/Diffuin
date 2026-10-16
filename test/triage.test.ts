@@ -108,6 +108,61 @@ describe("private issue triage", () => {
     await assert.rejects(runIssueTriage(config, github, request, async () => JSON.stringify({ ...output, publish: true })));
   });
 
+  it("assigns configured maintainers and checks the matching form even when already labeled", async () => {
+    const configured = { ...policy, assignees: ["maintainer"], templates: {
+      bug: ".github/ISSUE_TEMPLATE/bug_report.yml", feature: ".github/ISSUE_TEMPLATE/feature_request.yml",
+    } };
+    const enabled = { ...config, issueTriagePolicies: new Map([["example/project", configured]]) };
+    const current = { ...issue, title: "[BUG] Adapter load crash", labels: ["bug", "storage", "Medium"], assignees: ["someone-else"] };
+    let assigned: string[] = [];
+    const reminders: string[] = [];
+    const github = {
+      getIssue: async () => current,
+      listIssueLabels: async () => labels.map((name) => ({ name, description: null })),
+      applyIssueTriage: async (_request: WorkRequest, patch: { assignees: string[] }) => { assigned = patch.assignees; },
+      readIssueTemplate: async (_request: WorkRequest, path: string) => {
+        assert.equal(path, configured.templates.bug);
+        return "body: [{type: textarea, attributes: {label: Summary}, validations: {required: true}}]";
+      },
+      remindIssueTemplate: async (_request: WorkRequest, kind: string, path: string) => { reminders.push(`${kind}:${path}`); return true; },
+    } as unknown as GitHubPort;
+    const result = await runIssueTriage(enabled, github, request, async () => JSON.stringify(output));
+    assert.deepEqual(assigned, ["maintainer"]);
+    assert.equal(result.reminderPosted, true);
+    assert.equal(reminders.length, 1);
+    assert.equal(result.templateCheck?.status, "incomplete");
+    current.assignees.push("MAINTAINER");
+    assigned = [];
+    await runIssueTriage(enabled, github, request, async () => JSON.stringify(output));
+    assert.deepEqual(assigned, []);
+    const before = reminders.length;
+    await runIssueTriage(enabled, github, request, async () => JSON.stringify({ ...output, confidence: "medium" }));
+    assert.equal(reminders.length, before);
+  });
+
+  it("assigns feature reports, selects the feature form, and suppresses reminders for complete or unavailable templates", async () => {
+    const enabled = { ...config, issueTriagePolicies: new Map([["example/project", { ...policy, assignees: ["maintainer"], templates: {
+      bug: ".github/ISSUE_TEMPLATE/bug_report.yml", feature: ".github/ISSUE_TEMPLATE/feature_request.yml",
+    } }]]) };
+    const current = { ...issue, title: "New feature", body: "### Request\nAdd export", assignees: [] };
+    let unavailable = false;
+    const github = {
+      getIssue: async () => current,
+      listIssueLabels: async () => labels.map((name) => ({ name, description: null })),
+      applyIssueTriage: async () => undefined,
+      readIssueTemplate: async (_request: WorkRequest, path: string) => {
+        assert.match(path, /feature_request.yml$/);
+        if (unavailable) throw new Error("Not found");
+        return "body: [{type: textarea, attributes: {label: Request}, validations: {required: true}}]";
+      },
+      remindIssueTemplate: async () => { throw new Error("Must not comment"); },
+    } as unknown as GitHubPort;
+    const response = JSON.stringify({ ...output, kind: "feature", severity: "none", topics: [] });
+    assert.equal((await runIssueTriage(enabled, github, request, async () => response)).templateCheck?.status, "complete");
+    unavailable = true;
+    assert.equal((await runIssueTriage(enabled, github, request, async () => response)).templateCheck?.status, "unknown");
+  });
+
   it("verifies webhook signatures and deduplicates metadata jobs durably", async () => {
     const directory = mkdtempSync(join(tmpdir(), "diffuin-triage-"));
     const store = new JobStore(join(directory, "jobs.sqlite"));

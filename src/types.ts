@@ -48,6 +48,7 @@ export interface IssueContext {
   title: string;
   body: string | null;
   labels?: string[];
+  assignees?: string[];
   state?: string;
   isPullRequest?: boolean;
   comments?: IssueCommentContext[];
@@ -202,7 +203,9 @@ export interface GitHubReadBrokerPort {
 
 export interface GitHubPort {
   listIssueLabels?(request: WorkRequest): Promise<Array<{ name: string; description: string | null }>>;
-  applyIssueTriage?(request: WorkRequest, input: { title: string; addLabels: string[]; expected: IssueContext }): Promise<void>;
+  applyIssueTriage?(request: WorkRequest, input: { title: string; addLabels: string[]; assignees?: string[]; expected: IssueContext }): Promise<void>;
+  readIssueTemplate?(request: WorkRequest, path: string): Promise<string>;
+  remindIssueTemplate?(request: WorkRequest, kind: "bug" | "feature", path: string, expectedBody: string | null): Promise<boolean>;
   getActorPermission(request: WorkRequest): Promise<string>;
   addReaction(request: WorkRequest, reaction: "+1" | "eyes" | "rocket" | "confused"): Promise<void>;
   comment(request: WorkRequest, body: string): Promise<number>;

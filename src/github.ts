@@ -1,5 +1,6 @@
 import { App, Octokit } from "octokit";
 import { canWrite } from "./mention.js";
+import { issueTemplatePath, templateReminder } from "./issue-template.js";
 import type {
   GitHubPort,
   GitHubReadSource,
@@ -169,6 +170,7 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
       title: response.data.title,
       body: response.data.body ?? null,
       labels: response.data.labels.map((label) => typeof label === "string" ? label : label.name ?? ""),
+      assignees: (response.data.assignees ?? []).map((assignee) => assignee.login),
       state: response.data.state,
       isPullRequest: Boolean(response.data.pull_request),
       comments: await this.getConversation(request),
@@ -256,17 +258,52 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
     return labels.map(({ name, description }) => ({ name, description }));
   }
 
-  async applyIssueTriage(request: WorkRequest, input: { title: string; addLabels: string[]; expected: IssueContext }): Promise<void> {
+  async applyIssueTriage(request: WorkRequest, input: { title: string; addLabels: string[]; assignees?: string[]; expected: IssueContext }): Promise<void> {
     const octokit = await this.installation(request);
     const target = { owner: request.owner, repo: request.repo, issue_number: request.issueNumber };
     const current = await octokit.rest.issues.get(target);
     if (current.data.pull_request || current.data.state !== "open") throw new Error("Triage target is not an open issue");
     const currentLabels = current.data.labels.map((label) => typeof label === "string" ? label : label.name ?? "");
     if (current.data.title !== input.expected.title || (current.data.body ?? null) !== input.expected.body ||
-        JSON.stringify(currentLabels) !== JSON.stringify(input.expected.labels)) throw new Error("Triage target changed before delivery");
+        JSON.stringify(currentLabels) !== JSON.stringify(input.expected.labels) ||
+        JSON.stringify((current.data.assignees ?? []).map((assignee) => assignee.login)) !== JSON.stringify(input.expected.assignees ?? [])) {
+      throw new Error("Triage target changed before delivery");
+    }
     if (current.data.title !== input.title) await octokit.rest.issues.update({ ...target, title: input.title });
     // Additive API preserves labels that maintainers applied during classification.
     if (input.addLabels.length) await octokit.rest.issues.addLabels({ ...target, labels: input.addLabels });
+    if (input.assignees?.length) {
+      const assigned = await octokit.rest.issues.addAssignees({ ...target, assignees: input.assignees });
+      if (input.assignees.some((login) => !assigned.data.assignees?.some((user) => user.login.toLowerCase() === login.toLowerCase()))) {
+        throw new Error("Configured triage assignee is not assignable");
+      }
+    }
+  }
+
+  async readIssueTemplate(request: WorkRequest, path: string): Promise<string> {
+    issueTemplatePath.parse(path);
+    const octokit = await this.installation(request);
+    const ref = await this.getDefaultBranch(request);
+    const { data } = await octokit.rest.repos.getContent({ owner: request.owner, repo: request.repo, path, ref });
+    if (Array.isArray(data) || data.type !== "file" || !("content" in data) || data.encoding !== "base64" || data.size > 100_000) {
+      throw new Error("Issue template is not a supported file");
+    }
+    return Buffer.from(data.content, "base64").toString("utf8");
+  }
+
+  async remindIssueTemplate(request: WorkRequest, kind: "bug" | "feature", path: string, expectedBody: string | null): Promise<boolean> {
+    const body = templateReminder(kind, request.repository, path);
+    const marker = `<!-- diffuin:template-reminder:${kind} -->`;
+    const octokit = await this.installation(request);
+    const { data: app } = await this.app.octokit.request("GET /app");
+    const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+      owner: request.owner, repo: request.repo, issue_number: request.issueNumber, per_page: 100,
+    });
+    if (comments.some((comment) => comment.user?.type === "Bot" && comment.user.login === `${app!.slug}[bot]` && comment.body?.includes(marker))) return false;
+    const { data: issue } = await octokit.rest.issues.get({ owner: request.owner, repo: request.repo, issue_number: request.issueNumber });
+    if (issue.pull_request || issue.state !== "open" || (issue.body ?? null) !== expectedBody) return false;
+    await this.comment(request, body);
+    return true;
   }
 
   async getInstallationToken(request: WorkRequest): Promise<string> {
