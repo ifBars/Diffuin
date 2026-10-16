@@ -19,6 +19,7 @@ Keep every mutation attributable and reviewable. A model or skill may propose wo
 ## Security boundaries
 
 - Accept work and shared learning only from allowlisted repositories and write-equivalent actors.
+- Explicit deployment-owned issue-triage policies may authorize metadata-only classification of reports from outside contributors. This path must never invoke implementation, repository research, shared learning, or PR publication.
 - For pull requests, load repository guidance and shared dependencies from the trusted base reference, never the contributor-controlled head.
 - Treat conversation, remote repositories, memory, and repository files as evidence below application safety policy.
 - Keep GitHub installation credentials outside prompts. Remote research remains read-only and session-scoped.

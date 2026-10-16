@@ -23,7 +23,7 @@ export interface WorkRequest {
   repo: string;
   issueNumber: number;
   commentId: number;
-  commentKind?: "issue" | "review_comment" | "review";
+  commentKind?: "issue" | "review_comment" | "review" | "triage";
   actor: string;
   kind: TriggerKind;
   task: string;
@@ -47,6 +47,9 @@ export interface Job extends WorkRequest {
 export interface IssueContext {
   title: string;
   body: string | null;
+  labels?: string[];
+  state?: string;
+  isPullRequest?: boolean;
   comments?: IssueCommentContext[];
 }
 
@@ -198,6 +201,8 @@ export interface GitHubReadBrokerPort {
 }
 
 export interface GitHubPort {
+  listIssueLabels?(request: WorkRequest): Promise<Array<{ name: string; description: string | null }>>;
+  applyIssueTriage?(request: WorkRequest, input: { title: string; addLabels: string[]; expected: IssueContext }): Promise<void>;
   getActorPermission(request: WorkRequest): Promise<string>;
   addReaction(request: WorkRequest, reaction: "+1" | "eyes" | "rocket" | "confused"): Promise<void>;
   comment(request: WorkRequest, body: string): Promise<number>;

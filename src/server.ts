@@ -8,6 +8,7 @@ import { JobStore } from "./store.js";
 import { parseWorkRequest } from "./webhook.js";
 import { canAutomaticallyAddressReview } from "./pull-request.js";
 import { parseFeedbackEvent, parseMemoryCommand, parsePullRequestOutcome } from "./learning.js";
+import { parseTriageRequest } from "./triage.js";
 
 const MAX_WEBHOOK_BYTES = 1024 * 1024;
 
@@ -40,6 +41,12 @@ export function createDiffuinServer(config: Config, store: JobStore, github: Git
       }
 
       const payload = JSON.parse(rawBody.toString("utf8"));
+      const triage = parseTriageRequest(eventName, deliveryId, payload, config);
+      if (triage) {
+        // Deployment policy authorizes only metadata classification, never reporter-directed work.
+        const job = store.enqueue(triage);
+        return json(response, 202, { status: job ? "queued" : "duplicate", ...(job ? { jobId: job.id } : {}) });
+      }
       const outcome = parsePullRequestOutcome(eventName, deliveryId, payload);
       if (outcome) {
         if (!config.allowedRepositories.has(outcome.repository.toLowerCase())) {

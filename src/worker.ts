@@ -21,6 +21,7 @@ import { assertPublicationAllowed, requestsPublication } from "./intent.js";
 import { JobStore } from "./store.js";
 import { canWrite } from "./mention.js";
 import { canAutomaticallyAddressReview, isDiffuinOwnedPullRequest } from "./pull-request.js";
+import { runIssueTriage } from "./triage.js";
 
 export class Worker {
   private stopped = false;
@@ -54,6 +55,17 @@ export class Worker {
   }
 
   async process(job: Job): Promise<void> {
+    if (job.commentKind === "triage") {
+      try {
+        const outcome = await runIssueTriage(this.config, this.github, job);
+        this.store.saveTriageArtifact(job, outcome);
+        this.store.finish(job.id, "succeeded");
+      } catch {
+        // Classification can contain private policy. Keep failures out of public comments and logs.
+        this.store.finish(job.id, "failed", "Issue triage failed; inspect private deployment configuration and classifier availability");
+      }
+      return;
+    }
     let workspacePath: string | null = null;
     let githubReadSession: GitHubReadSession | null = null;
     let assetRipperReadSession: AssetRipperReadSession | undefined;

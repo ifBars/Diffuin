@@ -92,6 +92,13 @@ export class JobStore {
         thread_id TEXT,
         created_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS triage_artifacts (
+        job_id TEXT PRIMARY KEY,
+        repository_id INTEGER NOT NULL,
+        issue_number INTEGER NOT NULL,
+        artifact_json TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS delivered_findings (
         id TEXT PRIMARY KEY,
         job_id TEXT NOT NULL,
@@ -312,6 +319,14 @@ export class JobStore {
       "UPDATE run_artifacts SET unpublished_patch = ? WHERE job_id = ?",
     ).run(patch, jobId);
     if (result.changes !== 1) throw new Error("Cannot retain the unpublished patch without its run artifact");
+  }
+
+  saveTriageArtifact(job: Job, artifact: unknown): void {
+    this.database.prepare(`
+      INSERT OR REPLACE INTO triage_artifacts
+        (job_id, repository_id, issue_number, artifact_json, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(job.id, job.repositoryId, job.issueNumber, JSON.stringify(artifact), new Date().toISOString());
   }
 
   recordDeliveredFindings(jobId: string, artifact: DiffuinArtifact, externalCommentIds: readonly number[]): void {

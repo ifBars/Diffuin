@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { z } from "zod";
 import type { AgentProfileId, ReasoningEffort } from "./types.js";
 import { loadReferenceCatalog, type ReferenceSource } from "./reference-catalog.js";
+import { loadTriagePolicies, type TriagePolicy } from "./triage.js";
 
 const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(8787),
@@ -12,6 +13,7 @@ const schema = z.object({
   GITHUB_WEBHOOK_SECRET: z.string().min(16),
   DIFFUIN_HANDLE: z.string().regex(/^[A-Za-z0-9-]+$/).default("Diffuin"),
   ALLOWED_REPOSITORIES: z.string().min(1),
+  ISSUE_TRIAGE_POLICIES: z.string().optional(),
   DATA_DIR: z.string().default("./data"),
   CODEX_MODEL: z.string().default("gpt-6-luna"),
   CODEX_ALLOWED_MODELS: z.string().default("gpt-6-luna,gpt-6.1-sol,gpt-6-astra,gpt-5.3-codex-spark"),
@@ -44,6 +46,7 @@ export interface Config {
   githubWebhookSecret: string;
   handle: string;
   allowedRepositories: ReadonlySet<string>;
+  issueTriagePolicies?: ReadonlyMap<string, TriagePolicy>;
   dataDir: string;
   codexModel: string;
   allowedCodexModels: ReadonlySet<string>;
@@ -89,6 +92,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     githubWebhookSecret: parsed.GITHUB_WEBHOOK_SECRET,
     handle: parsed.DIFFUIN_HANDLE,
     allowedRepositories,
+    issueTriagePolicies: loadTriagePolicies(parsed.ISSUE_TRIAGE_POLICIES, allowedRepositories),
     dataDir: resolve(parsed.DATA_DIR),
     codexModel: parsed.CODEX_MODEL,
     allowedCodexModels,

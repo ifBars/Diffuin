@@ -33,7 +33,7 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
   }
 
   async addReaction(request: WorkRequest, reaction: "+1" | "eyes" | "rocket" | "confused"): Promise<void> {
-    if (request.commentKind === "review") return;
+    if (request.commentKind === "review" || request.commentKind === "triage") return;
     const octokit = await this.installation(request);
     const create = request.commentKind === "review_comment"
       ? octokit.rest.reactions.createForPullRequestReviewComment
@@ -168,6 +168,9 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
     return {
       title: response.data.title,
       body: response.data.body ?? null,
+      labels: response.data.labels.map((label) => typeof label === "string" ? label : label.name ?? ""),
+      state: response.data.state,
+      isPullRequest: Boolean(response.data.pull_request),
       comments: await this.getConversation(request),
     };
   }
@@ -243,6 +246,27 @@ export class GitHubClient implements GitHubPort, GitHubReadSource {
       title: input.title,
       body: input.body,
     });
+  }
+
+  async listIssueLabels(request: WorkRequest): Promise<Array<{ name: string; description: string | null }>> {
+    const octokit = await this.installation(request);
+    const labels = await octokit.paginate(octokit.rest.issues.listLabelsForRepo, {
+      owner: request.owner, repo: request.repo, per_page: 100,
+    });
+    return labels.map(({ name, description }) => ({ name, description }));
+  }
+
+  async applyIssueTriage(request: WorkRequest, input: { title: string; addLabels: string[]; expected: IssueContext }): Promise<void> {
+    const octokit = await this.installation(request);
+    const target = { owner: request.owner, repo: request.repo, issue_number: request.issueNumber };
+    const current = await octokit.rest.issues.get(target);
+    if (current.data.pull_request || current.data.state !== "open") throw new Error("Triage target is not an open issue");
+    const currentLabels = current.data.labels.map((label) => typeof label === "string" ? label : label.name ?? "");
+    if (current.data.title !== input.expected.title || (current.data.body ?? null) !== input.expected.body ||
+        JSON.stringify(currentLabels) !== JSON.stringify(input.expected.labels)) throw new Error("Triage target changed before delivery");
+    if (current.data.title !== input.title) await octokit.rest.issues.update({ ...target, title: input.title });
+    // Additive API preserves labels that maintainers applied during classification.
+    if (input.addLabels.length) await octokit.rest.issues.addLabels({ ...target, labels: input.addLabels });
   }
 
   async getInstallationToken(request: WorkRequest): Promise<string> {

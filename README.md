@@ -130,6 +130,7 @@ Create a GitHub App with:
   - Pull requests: Read and write
   - Metadata: Read-only (GitHub adds this automatically)
 - Subscribe to events:
+  - Issues (when private automatic triage is enabled)
   - Issue comment
   - Pull request review comment
   - Pull request review
@@ -137,6 +138,57 @@ Create a GitHub App with:
 
 Generate a private key and install the App only on repositories you intend to
 list in `ALLOWED_REPOSITORIES`.
+
+## Optional private issue triage
+
+Set `ISSUE_TRIAGE_POLICIES` as a private runtime environment secret containing a
+JSON object keyed by allowlisted `owner/repository`. It is disabled by default.
+Keep real rules, examples, repository mappings, and deployment credentials outside
+the public repository and image. Other operators can supply their own policy:
+
+```json
+{
+  "example/project": {
+    "rules": "Your private severity rubric and classification examples.",
+    "bugLabel": "bug",
+    "featureLabel": "enhancement",
+    "severityLabels": {
+      "low": "Low", "medium": "Medium", "high": "High", "critical": "Critical"
+    },
+    "topicLabels": ["documentation"],
+    "model": "gpt-6-luna"
+  }
+}
+```
+
+Subscribe the GitHub App to **Issues** events. Signed `opened`, `reopened`, and
+title/body `edited` events on open issues queue metadata-only jobs, including
+reports by outside contributors. Bot events, pull requests, and unconfigured
+repositories are ignored. Existing issues are not bulk-reprocessed by deployment.
+Comment-only additions do not automatically retriage an issue.
+
+The classifier uses bounded report text, recent comments, existing label metadata,
+and the private rubric. It has no repository checkout or GitHub research session;
+shell tools, apps, plugins, network access, and web search are disabled. The
+application validates its structured response and adds `[BUG]` or `[FEATURE]`
+plus configured existing labels only at high confidence. Features receive no new
+bug severity. Existing severity labels and conflicting type classifications are
+preserved as maintainer overrides. Uncertain classifications leave metadata alone.
+
+Diffuin preserves the issue body and unrelated labels, rechecks the report before
+delivery, and never posts the private rationale as an issue comment. Decisions
+are recorded in the private SQLite run artifacts; classifier prompts also remain
+in the private Codex state. Keep the `/data` volume private. Redeliveries are
+deduplicated in the durable queue. Metadata API calls are additive and retryable,
+but GitHub does not offer an atomic transaction with the pre-delivery recheck.
+The normal write-actor checks still govern implementation, review, and memory.
+
+On Northflank, set the policy as a service runtime secret or through a secret
+group. Use `northflank update service runtime-environment --projectId <project>
+--serviceId <service> --file <private-file.json>` with the existing runtime
+environment preserved. Do not commit that file or pass private policy inline in
+shell arguments. Restart/deploy the service and verify `/health`, the Issues
+subscription, and a private classifier dry run before relying on automatic triage.
 
 If a repository ruleset applies required checks to `~ALL` branches, exclude
 `refs/heads/diffuin/**` from that rule or grant the Diffuin App a narrowly

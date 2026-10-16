@@ -11,6 +11,15 @@ Diffuin is designed for a private, operator-controlled deployment. It accepts
 work only for explicitly allowlisted repositories and only from actors with
 `write`, `maintain`, or `admin` permission.
 
+An opt-in deployment-owned issue-triage policy is the sole exception for outside
+reporters: signed Issues events may trigger bounded title/label classification.
+This runs separately from the repository agent with shell tools and network
+access disabled, without a checkout or remote research broker. Only configured
+existing labels and fixed title prefixes may be published. Report text cannot
+authorize code changes, memory updates, comments, or wider capability access.
+Private policy and classification artifacts remain in operator-controlled
+runtime configuration, SQLite, and Codex state. Protect those storage locations.
+
 Codex receives a fresh checkout with network access disabled and no GitHub App
 token in its environment. Spark receives the same checkout, explicit read roots,
 structured-output contract, and only short-lived broker credentials; it never
